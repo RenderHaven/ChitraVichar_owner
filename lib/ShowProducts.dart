@@ -1,53 +1,49 @@
-
-import 'package:chitraowner/EditProduct.dart';
-import 'package:chitraowner/HomePage.dart';
 import 'package:flutter/material.dart';
-import 'ApiManagment/ProductApi.dart';
-import 'SearchProducts.dart';
-import 'addproduct.dart';
 import 'package:get/get.dart';
-import 'dashboard.dart'; // Assuming AddProduct is a separate widget you defined
+import 'ApiManagment/ProductApi.dart';
+import 'EditProduct.dart';
+import 'HomePage.dart';
+import 'SearchProducts.dart';
+import 'Tools.dart';
+import 'addproduct.dart';
+import 'dashboard.dart';
 
 class Showproducts extends StatefulWidget {
-  String? categoryId; // Category ID passed as a parameter
-  String oldpath;
-  Showproducts({this.categoryId = null,this.oldpath='New'});
+  final String? categoryId;
+  final String oldpath;
+  
+  const Showproducts({
+    this.categoryId,
+    this.oldpath = 'New',
+    Key? key,
+  }) : super(key: key);
 
   @override
-  State<Showproducts> createState() => _State();
+  State<Showproducts> createState() => _ShowproductsState();
 }
 
-class _State extends State<Showproducts> {
-  HomepageController homepageController=Get.put(HomepageController());
-  // List<dynamic> products = []; // List to store products
-  List<dynamic> products_data = []; // List to store products
-  bool isLoading = true; // Track loading state
+class _ShowproductsState extends State<Showproducts> {
+  final HomepageController homepageController = Get.put(HomepageController());
+  List<dynamic> productsData = [];
+  bool isLoading = true;
+  bool _showDeleteConfirmationDialog = true;
 
   @override
   void initState() {
     super.initState();
-    fetchProducts(); // Fetch products when the screen is loaded
+    _fetchProducts();
   }
 
-  // Function to fetch products by category
-  Future<void> fetchProducts() async {
-    setState(() {
-      isLoading = true;
-    });
-
-    try{
-      var response = await ProductApi.getProductsByCategory(widget.categoryId);
-      setState(() {
-        products_data = response;
-        isLoading = false;
-      });
-      print(products_data);
-    } catch(e) {
-      setState(() {
-        isLoading = false;
-      });
-      // Handle error here
-      print('Error: $e');
+  Future<void> _fetchProducts() async {
+    setState(() => isLoading = true);
+    
+    try {
+      final response = await ProductApi.getProductsByCategory(widget.categoryId);
+      setState(() => productsData = response);
+    } catch (e) {
+      Homepage.showOverlayMessage(context, 'Error loading products: $e');
+    } finally {
+      setState(() => isLoading = false);
     }
   }
 
@@ -56,215 +52,423 @@ class _State extends State<Showproducts> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-            height: 25,
-            margin: EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: Colors.cyan,
-              borderRadius: BorderRadius.circular(5),
-            ),
-            child: Text(
-              "Products(${products_data.length})", style: TextStyle(fontWeight: FontWeight.bold),)
-        ),
-        if (isLoading)
-          Center(child: CircularProgressIndicator()),
-        // Show loading indicator
-        if (!isLoading && products_data.isEmpty)
-          Center(child: Text('No products found')),
-        // Show message if no products
-        if (!isLoading && products_data.isNotEmpty)
-          SizedBox(
-            height: 250,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                for (var product in products_data)ProductCard(product: product),
-              ],
-            ),
-          ),
-        IconButton(
-          onPressed: () {
-            // Show AddProduct form as a popup (dialog)
-            showDialog(
-              context: context,
-              builder: (BuildContext context) {
-                return  AddProduct(categoryId: widget.categoryId,);
-              },
-            ).then((value){
-              if(value=='Done'){
-                fetchProducts();
-              }
-            });
-          },
-          icon: Icon(Icons.add),
-        ),
+        _buildHeader(),
+        const SizedBox(height: 16),
+        _buildProductsList(),
       ],
     );
   }
 
-  Future<void> _showDeleteConfirmation(BuildContext context,
-      String? productId) async {
-    bool confirm = await showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('Delete Product', style: TextStyle(color: Colors.red),),
-          content: Text(
-              'Are you sure you want to Delete this Product?,\nNOTE:This Action Will Delete All Sub Products Too'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: Text('Cancel'),
+  Widget _buildHeader() {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.blue[50],
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.blue[100]!),
+          ),
+          child: Text(
+            "Products (${productsData.length})",
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.blue,
             ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: Text('Delete'),
-            ),
-          ],
-        );
-      },
-    ) ?? false;
-
-    if (confirm) {
-      // Call delete function
-      try {
-        if (productId == null) throw();
-        final x = await ProductApi.removeProduct(productId);
-        if (!x.containsKey('error')){
-          Homepage.showOverlayMessage(context, 'Product removed successfully');          fetchProducts();
-        }
-        else
-          throw();
-      } catch (e) {
-        Homepage.showOverlayMessage(context, 'Failed to remove product: $e');      }
-    }
+          ),
+        ),
+        IconButton(onPressed: _showAddProductDialog , icon: Icon(Icons.add))
+      ],
+    );
   }
 
-  // Widget for individual product items
-  Widget ProductCard({required Map<String, dynamic> product}) {
-    String productName = product['name'] ?? 'No name available';
-    String productImage = product['image_url'] ??
-        'https://upload.wikimedia.org/wikipedia/commons/1/14/No_Image_Available.jpg';
-
-    // Attempt to display the product image
-    Widget productImageWidget;
-    if (productImage.isNotEmpty) {
-      try {
-        productImageWidget = Image.network(productImage, fit: BoxFit.cover);
-      } catch (e) {
-        productImageWidget =
-            Icon(Icons.not_interested); // Fallback if image fails
-      }
-    } else {
-      productImageWidget = Icon(Icons.not_interested); // Fallback if no image
+  Widget _buildProductsList() {
+    if (isLoading) {
+      return const Center(child: CircularProgressIndicator());
     }
-
-    return Card(
-      elevation: 4.0,
-      child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) =>
-                  Dashboard(
-                    productId: product['p_id'],
-                    path: widget.oldpath + ">" + productName,
-                  ),
-            ),
-          );
-        },
-        child: Stack(
-          children: [
-            Container(
-              width: 150,
-              height: 300,
-              color: (product['is_active']??true)?Colors.blueAccent.withOpacity(0.1):Colors.redAccent.withOpacity(0.1),
-              margin: EdgeInsets.only(bottom: 35),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    width: 120,
-                    height: 120,
-                    child: productImageWidget,
-                  ),
-                  SizedBox(height: 10),
-                  Text(
-                    productName,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    'Type : ${product['type']}',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    'Discount : ${product['discount']}',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            if(product['c_id']!=null)Positioned(
-              top: 0,
-              left: 0,
-              child: IconButton(
-                  icon: Icon(Icons.drive_file_move_outlined),
-                  onPressed: () =>showModalBottomSheet(
-                    context: context,
-                    builder: (BuildContext context) {
-                      return Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: SearchBarWidget(searchType: 'product'), // You can pass 'product' or 'item' based on the need
-                      );
-                    },
-                  ).then((result)async{
-                    if(result?['p_id']==null)return;
-                    await ProductApi.moveProduct(productId: product['p_id'], parent_productId:result['p_id']);
-                    fetchProducts();
-                  }),
-              ),
-            ),
-            if(product['c_id']!=null)Positioned(
-              bottom: 0,
-              left: 0,
-              child: IconButton(
-                icon: Icon(Icons.delete, color: Colors.red),
-                onPressed: () => _showDeleteConfirmation(context, product['p_id'])
-              ),
-            ),
-            if(product['is_new']??true)Positioned(
-              top: 2,
-              right: 2,
-              child: Icon(Icons.fiber_new_outlined, color: Colors.green,size: 30,),
-            ),
-            if(product['c_id']!=null)Positioned(
-              bottom: 0,
-              right: 0,
-              child: IconButton(
-                icon: Icon(Icons.edit_outlined),
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (context) =>EditProduct(productId: product['p_id'],productData: product,)
-                  ).then((value){
-                    if(value=='Done'){
-                      fetchProducts();
-                    }
-                  });
-                },
-              ),
-            ),
-          ],
+    
+    if (productsData.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey[50],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Center(
+          child: Text(
+            'No products found',
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
+      );
+    }
+    
+    return SizedBox(
+      height: 280,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: productsData.length,
+        itemBuilder: (context, index) => Padding(
+          padding: const EdgeInsets.only(right: 16),
+          child: _buildProductCard(productsData[index]),
         ),
       ),
     );
+  }
+
+  Widget _buildProductCard(Map<String, dynamic> product) {
+    final isActive = product['is_active'] ?? true;
+    final isNew = product['is_new'] ?? false;
+    final canEdit = product['c_id'] != null;
+
+    return SizedBox(
+      width: 180,
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _navigateToProductDashboard(product),
+          child: Stack(
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Product Image
+                  Container(
+                    height: 120,
+                    decoration: BoxDecoration(
+                      color: isActive 
+                          ? Colors.blue[50] 
+                          : Colors.red[50],
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(12),
+                      ),
+                    ),
+                    child: product['image_url']?.isNotEmpty == true
+                        ? ClipRRect(
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(12),
+                            ),
+                            child: ClickableImageNetwork(
+                              imageUrl: product['image_url'],
+                              fit: BoxFit.contain,
+                            ),
+                          )
+                        : const Center(
+                            child: Icon(Icons.image, size: 48, color: Colors.grey),
+                          ),
+                  ),
+                  
+                  // Product Info
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          product['name'] ?? 'No name',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Type: ${product['type'] ?? 'N/A'}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Discount: ${product['discount'] ?? '0'}%',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.green[700],
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              
+              // Status Badges
+              if (isNew)
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.green,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'NEW',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              
+              if (!isActive)
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'INACTIVE',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              
+              // Action Buttons
+              if (canEdit) ...[
+                Positioned(
+                  bottom: 8,
+                  right: 8,
+                  child: IconButton(
+                    icon: const Icon(Icons.edit, size: 20),
+                    onPressed: () => _showEditProductDialog(product),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.white.withOpacity(0.9),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  bottom: 8,
+                  left: 8,
+                  child: IconButton(
+                    icon: const Icon(Icons.delete, size: 20, color: Colors.red),
+                    onPressed: () => _confirmProductDeletion(product),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.white.withOpacity(0.9),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: IconButton(
+                    icon: const Icon(Icons.drive_file_move_outline, size: 20),
+                    onPressed: () => _showMoveProductSheet(product),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.white.withOpacity(0.9),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _navigateToProductDashboard(Map<String, dynamic> product) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Dashboard(
+          productId: product['p_id'],
+          path: '${widget.oldpath} > ${product['name']}',
+        ),
+      ),
+    );
+  }
+
+  void _showAddProductDialog() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom, // Accounts for keyboard
+        ),
+        child: AddProduct(categoryId: widget.categoryId),
+      ),
+    ).then((value) {
+      if (value == 'Done') _fetchProducts();
+    });
+  }
+
+  void _showEditProductDialog(Map<String, dynamic> product) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom, // Accounts for keyboard
+        ),
+        child: EditProduct(
+          productId: product['p_id'],
+          productData: product,
+        ),
+      ),
+    ).then((value) {
+      if (value == 'Done') _fetchProducts();
+    });
+  }
+
+  void _showMoveProductSheet(Map<String, dynamic> product) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Move Product To',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+            const SizedBox(height: 16),
+            SearchBarWidget(searchType: 'product'),
+          ],
+        ),
+      ),
+    ).then((result) async {
+      if (result?['p_id'] == null) return;
+      try {
+        await ProductApi.moveProduct(
+          productId: product['p_id'],
+          parent_productId: result['p_id'],
+        );
+        _fetchProducts();
+        Homepage.showOverlayMessage(context, 'Product moved successfully');
+      } catch (e) {
+        Homepage.showOverlayMessage(context, 'Failed to move product: $e');
+      }
+    });
+  }
+
+  Future<void> _confirmProductDeletion(Map<String, dynamic> product) async {
+    if (!_showDeleteConfirmationDialog) {
+      await _deleteProduct(product);
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text(
+          'Delete Product',
+          style: TextStyle(color: Colors.red),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Are you sure you want to delete this product?',
+              style: TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Note: This will also delete all sub-products',
+              style: TextStyle(
+                color: Colors.red[700],
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Checkbox(
+                  value: !_showDeleteConfirmationDialog,
+                  onChanged: (value) {
+                    setState(() {
+                      _showDeleteConfirmationDialog = !(value ?? false);
+                    });
+                    Navigator.pop(context, false);
+                  },
+                ),
+                const Text("Don't show again"),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    ) ?? false;
+
+    if (confirmed) await _deleteProduct(product);
+  }
+
+  Future<void> _deleteProduct(Map<String, dynamic> product) async {
+    try {
+      final response = await ProductApi.removeProduct(product['p_id']);
+      
+      if (!response.containsKey('error')) {
+        Homepage.showOverlayMessage(context, 'Product deleted successfully');
+        _fetchProducts();
+      } else {
+        throw Exception(response['error']);
+      }
+    } catch (e) {
+      Homepage.showOverlayMessage(context, 'Failed to delete product: $e');
+    }
   }
 }

@@ -89,89 +89,133 @@ class _AddItemsToProductState extends State<AddItemsToProduct> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // appBar: AppBar(title: Text("Add Items to Product")),
       body: Padding(
-        padding: const EdgeInsets.all(5.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            SizedBox(height: 15,),
-            TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                labelText: "Search for items",
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-                suffixIcon: IconButton(onPressed:(){
-                  showDialog(
-                    context: context,
-                    builder: (BuildContext context) {
-                      return AlertDialog(
-                        contentPadding: EdgeInsets.all(5),
-                        title: Text('Add Item'),
-                        content: AddIteam(productId: widget.productId,), // The AddProduct widget appears in the dialog
-                        actions: <Widget>[
-                          // Add a Close button to close the dialog
-                          TextButton(
-                            onPressed: () {
-                              Navigator.pop(context); // Close the dialog
-                            },
-                            child: Text('Close'),
-                          ),
-                        ],
-                      );
-                    },
-                  ).then((v) {
-                    if(v=='Done'){
-                      _filterItems();
-                      Navigator.pop(context);
-                    }
-
-                  });
-                } , icon:Icon(Icons.add))
-              ),
-              onChanged: _onSearchChanged, // Trigger search on text change
+            // Search and Add Item Row
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      labelText: "Search items",
+                      prefixIcon: Icon(Icons.search),
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                    ),
+                    onChanged: _onSearchChanged,
+                  ),
+                ),
+                SizedBox(width: 8),
+                IconButton(
+                  icon: Icon(Icons.add, size: 32),
+                  tooltip: 'Add new item',
+                  onPressed: _showAddItemBottomSheet,
+                ),
+              ],
             ),
             SizedBox(height: 16),
-
-            // Show loading spinner if searching
-            Obx((){
+            
+            // Items List
+            Obx(() {
               return controller.isItemLoading.value
-                  ? CircularProgressIndicator()
+                  ? Center(child: CircularProgressIndicator())
                   : Expanded(
-                child: (controller.itemSearchList.value??[]).isNotEmpty?ListView.builder(
-                  itemCount: controller.itemSearchList.value?.length??0,
-                  itemBuilder: (context, index) {
-                    final item = controller.itemSearchList.value?[index]??{};
-                    return (item['i_id']!='Lable' && item.containsKey('name') && ! widget.MyItemsId.contains(item['i_id']??''))?Card(
-                      child: CheckboxListTile(
-                          title: Text(item['name']),
-                          value: _selectedItems.contains(item['i_id']),
-                          onChanged: (bool? selected) {
-                            setState(() {
-                              if (selected == true) {
-                                _selectedItems.add(item['i_id']);
-                              } else {
-                                _selectedItems.remove(item['i_id']);
-                              }
-                            });
-                          },
-                      ),
-                    ):SizedBox.shrink();
-                  },
-                ):Text('NO DATA'),
-              );
+                      child: _buildItemsList(),
+                    );
             }),
-            // Button to add selected items to a product
-            ElevatedButton(
-              onPressed: () {
-                _addItemsToProduct(widget.productId); // Add selected items to product
-              },
-              child: Text('Add Selected Items'),
+            
+            // Add Selected Button
+            Container(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                onPressed: () => _addItemsToProduct(widget.productId),
+                child: Text(
+                  'Add ${_selectedItems.length} Selected Items',
+                  style: TextStyle(fontSize: 16),
+                ),
+              ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildItemsList() {
+    final items = controller.itemSearchList.value ?? [];
+    
+    if (items.isEmpty) {
+      return Center(
+        child: Text(
+          'No items found',
+          style: TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final item = items[index];
+        if (item['i_id'] == 'Lable' || 
+            !item.containsKey('name') || 
+            widget.MyItemsId.contains(item['i_id'] ?? '')) {
+          return SizedBox.shrink();
+        }
+
+        return Card(
+          margin: EdgeInsets.only(bottom: 8),
+          elevation: 1,
+          child: ListTile(
+            contentPadding: EdgeInsets.symmetric(horizontal: 16),
+            title: Text(item['name']),
+            trailing: Checkbox(
+              value: _selectedItems.contains(item['i_id']),
+              onChanged: (bool? selected) {
+                setState(() {
+                  if (selected == true) {
+                    _selectedItems.add(item['i_id']);
+                  } else {
+                    _selectedItems.remove(item['i_id']);
+                  }
+                });
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showAddItemBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom, // Accounts for keyboard
+        ),
+        child: AddIteam(productId: widget.productId),
+      ),
+    ).then((value) {
+      if (value == 'Done') {
+        _filterItems();
+        Navigator.pop(context);
+      }
+    });
   }
 }
 

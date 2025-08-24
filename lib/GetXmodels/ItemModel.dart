@@ -1,7 +1,7 @@
 import 'package:get/get.dart';
 
 import '../ApiManagment/ProductApi.dart';
-
+import "package:product_personaliser/product_personaliser.dart";
 class ItemModel {
   String? itemId;
   String name;
@@ -17,6 +17,7 @@ class ItemModel {
   String? tagName;
   String? discount;
   List<Map<String, dynamic>>? images;
+  DesignTemplate? template;
 
   ItemModel({
     required this.itemId,
@@ -33,6 +34,7 @@ class ItemModel {
     this.associatedProducts,
     required this.tagName,
     required this.images,
+    this.template,
   });
 
   factory ItemModel.fromJson(Map<String, dynamic> json) {
@@ -46,6 +48,9 @@ class ItemModel {
       productId: json['product_id'] ?? 'NA',
       isImgChanged: json['isImgChanged'] ?? false,
       displayImg: json['display_image_url'] ?? 'NA',
+      template: json['template'] != null
+      ? DesignTemplate.fromData(json['template'])
+      : null,
       images: json['images'] != null
           ? List<Map<String, dynamic>>.from(json['images'])
           : [],
@@ -74,6 +79,7 @@ class ItemModel {
       'disc_id': discId,
       'tag_name': tagName,
       'images':images,
+      't_id':template?.id
     };
   }
 
@@ -102,7 +108,7 @@ class ItemController extends GetxController {
       }
 
       item.value = ItemModel.fromJson(details);
-      print(details);
+      // print(details);
     } catch (e) {
       Get.snackbar("Error", "Failed to fetch item: $e");
     } finally {

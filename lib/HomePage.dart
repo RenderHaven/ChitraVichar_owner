@@ -1,18 +1,22 @@
-
 import 'package:chitraowner/MyCoupens.dart';
 import 'package:chitraowner/MyDescription.dart';
 import 'package:chitraowner/MyItems.dart';
 import 'package:chitraowner/MyOrders.dart';
+import 'package:chitraowner/MyTemplates.dart';
 import 'package:chitraowner/MyUsers.dart';
 import 'package:chitraowner/MyVariation.dart';
 import 'package:chitraowner/OverView.dart';
 import 'package:chitraowner/ProductTree.dart';
+import 'package:chitraowner/Reviews.dart';
 import 'package:chitraowner/SendMail.dart';
 import 'package:chitraowner/dashboard.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:product_personaliser/product_personaliser.dart';
+import 'dart:html' as html;
 import 'ApiManagment/ProductApi.dart';
+
 
 class HomepageController extends GetxController {
   var selectedRoute = Rx<String>('/overview');
@@ -25,6 +29,10 @@ class HomepageController extends GetxController {
   var variationList = Rxn<List<Map<String, dynamic>>>();
   var variationSearchList = Rxn<List<Map<String, dynamic>>>();
   var isVariationLoading = false.obs;
+
+  var templateList = Rxn<List<DesignTemplate>>();
+  var templateSearchList = Rxn<List<DesignTemplate>>();
+  var isTemplateLoading = false.obs;
 
   var orderList = Rxn<List<Map<String, dynamic>>>();
   var orderSearchList = Rxn<List<Map<String, dynamic>>>();
@@ -53,9 +61,9 @@ class HomepageController extends GetxController {
   var productsData = <String, dynamic>{}.obs;
   var isTreeLoading = false.obs;
   @override
-  void onInit() {
+  void onInit() async{
     super.onInit();
-    searchUsers();
+    await searchUsers();
     searchOrders();
     fetchSummery();
     fetchProductsTree();
@@ -80,6 +88,8 @@ class HomepageController extends GetxController {
       isSummeryLoading.value = false;
     }
   }
+
+
 
   Future<void> fetchProductsTree() async {
 
@@ -135,14 +145,25 @@ class HomepageController extends GetxController {
     isOrderLoading.value = true;
     try {
       final results = await OrderApi.getAllOrders();
-      // print(results);
-      orderList.value = results;
+
+      // Attach user_name to each order
+      final updatedOrders = results.map((order) {
+        final user = userList.value?.firstWhere(
+          (user) => order['user_id'] == user['id'],
+          orElse: () => {'first_name': 'Unknown'},
+        );
+        order['user_name'] = user?['first_name'] ?? 'Unknown';
+        return order;
+      }).toList();
+
+      orderList.value = updatedOrders;
     } catch (e) {
       print("Error fetching orders: $e");
     } finally {
       isOrderLoading.value = false;
     }
   }
+
 
   // ✅ Search Users
   Future<void> searchUsers() async {
@@ -195,11 +216,25 @@ class HomepageController extends GetxController {
       isDescriptionLoading.value = false;
     }
   }
+
+  Future<void> fetchTemplates() async {
+    isTemplateLoading.value = true;
+    try {
+      final List<Map<String, dynamic>> data = await TemplateApi.getAll();
+
+      final templates = data.map((json) => DesignTemplate.fromData(json)).toList();
+
+      templateList.value = templates;
+    } catch (e) {
+      print("Error fetching templates: $e");
+    } finally {
+      isTemplateLoading.value = false;
+    }
+  }
 }
 
 class Homepage extends StatefulWidget {
-
-  static void showOverlayMessage(BuildContext context,String msg) {
+  static void showOverlayMessage(BuildContext context, String msg) {
     final overlay = Overlay.of(context);
     final overlayEntry = OverlayEntry(
       builder: (context) => Positioned(
@@ -213,10 +248,24 @@ class Homepage extends StatefulWidget {
             decoration: BoxDecoration(
               color: Colors.black87,
               borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 10,
+                  spreadRadius: 2,
+                ),
+              ],
             ),
-            child: Text(
-              msg,
-              style: TextStyle(color: Colors.white),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.info_outline, color: Colors.white),
+                SizedBox(width: 8),
+                Text(
+                  msg,
+                  style: TextStyle(color: Colors.white),
+                ),
+              ],
             ),
           ),
         ),
@@ -224,200 +273,258 @@ class Homepage extends StatefulWidget {
     );
 
     overlay.insert(overlayEntry);
-
-    // Remove after 3 seconds
     Future.delayed(Duration(seconds: 3)).then((_) => overlayEntry.remove());
   }
-  const Homepage({super.key});
+
+  Homepage({super.key});
 
   @override
   _HomepageState createState() => _HomepageState();
 }
 
 class _HomepageState extends State<Homepage> {
-  final HomepageController Homecontroller = Get.put(HomepageController());
-  final TextEditingController _keyController=TextEditingController();
+  final HomepageController homeController = Get.put(HomepageController());
   final GlobalKey<NavigatorState> _contentNavigatorKey = GlobalKey<NavigatorState>();
+  bool _isDrawerOpen = false;
 
-  final _key='Chitra@1234';
-  String? password;
+  Future<void> _clearAuth() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+    html.window.location.reload();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // body: _buildColumnLayout(),
-      body: Stack(
-        children: [
-          // Main page content
-          Center(
-            child: _buildColumnLayout(),
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        title: Row(
+          children: [
+            Icon(Icons.store, color: Colors.white),
+            SizedBox(width: 8),
+            Text(
+              'ChitraVichar Admin',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.logout),
+            tooltip: 'Logout',
+            onPressed: _clearAuth,
           ),
+        ],
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Colors.blue[800]!, Colors.blue[600]!],
+            ),
+          ),
+        ),
+      ),
+      drawer: _buildDrawer(),
+      body: Row(
+        children: [
+          // Sidebar for larger screens
+          if (MediaQuery.of(context).size.width > 800) _buildDesktopSidebar(),
+          // Main content area
+          Expanded(
+            child: Navigator(
+              key: _contentNavigatorKey,
+              onGenerateRoute: (settings) {
+                Widget page;
+                switch (settings.name) {
+                  case '/items':
+                    page = MyItems();
+                    break;
+                  case '/orders':
+                    page = MyOrders();
+                    break;
+                  case '/users':
+                    page = MyUsers();
+                    break;
+                  case '/variation':
+                    page = MyVariation();
+                    break;
+                  case '/description':
+                    page = MyDescription();
+                    break;
+                  case '/coupon':
+                    page = MyCoupons();
+                    break;
+                  case '/dashboard':
+                    page = Dashboard();
+                    break;
+                  case '/overview':
+                    page = Overview();
+                    break;
+                  case '/templates':
+                    page = MyTemplates();
+                    break;
+                  case '/promotion':
+                    page = PromotionPage();
+                    break;
+                  case '/reviews':
+                    page = ReviewPage();
+                    break;
+                  default:
+                    page = Overview();
+                }
+                return MaterialPageRoute(builder: (_) => page);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-          // Conditional overlay
-          if (password!=_key)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black.withOpacity(0.8), // semi-transparent background
-                child: Center(
-                  child: Card(
-                    margin: EdgeInsets.all(5),
-                    elevation: 8,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Container(
-                      constraints: BoxConstraints(maxWidth: 500),
-                      // color: Colors.blueGrey,
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            "Hello Admin",
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                          ),
-                          SizedBox(height: 10),
-                          Text("Enter your key"),
-                          SizedBox(height: 10),
-                          TextField(
-                            obscureText: true,
-                            controller: _keyController,
-                            decoration: InputDecoration(
-                              labelText: 'Key',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                          SizedBox(height: 10),
-                          ElevatedButton(
-                            onPressed: () {
-                              setState(() {
-                                password=_keyController.text.trim(); // hide overlay on submit
-                              });
-                            },
-                            child: Text("Submit"),
-                          )
-                        ],
+  Widget _buildDrawer() {
+    return Drawer(
+      child: Container(
+        color: Colors.grey[100],
+        child: Column(
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Colors.blue[800]!, Colors.blue[600]!],
+                ),
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.store, size: 40, color: Colors.white),
+                    SizedBox(height: 8),
+                    Text(
+                      'Admin Panel',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: _buildMenuOptions(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopSidebar() {
+    return Container(
+      width: 250,
+      color: Colors.grey[100],
+      child: Column(
+        children: [
+          Container(
+            height: 150,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Colors.blue[800]!, Colors.blue[600]!],
+              ),
+            ),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.store, size: 40, color: Colors.white),
+                  SizedBox(height: 8),
+                  Text(
+                    'Admin Panel',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: _buildMenuOptions(),
+              ),
+            ),
+          ),
         ],
       ),
-
     );
   }
 
+  List<Widget> _buildMenuOptions() {
+    final List<Map<String, dynamic>>  menuItems = [
+      {'title': 'Dashboard', 'route': '/overview', 'icon': Icons.dashboard},
+      {'title': 'Overview', 'route': '/dashboard', 'icon': Icons.analytics},
+      {'title': 'Products', 'route': '/items', 'icon': Icons.inventory},
+      {'title': 'Orders', 'route': '/orders', 'icon': Icons.shopping_cart},
+      {'title': 'Customers', 'route': '/users', 'icon': Icons.people},
+      {'title': 'Variations', 'route': '/variation', 'icon': Icons.category},
+      {'title': 'Descriptions', 'route': '/description', 'icon': Icons.description},
+      {'title': 'Coupons', 'route': '/coupon', 'icon': Icons.local_offer},
+      {'title': 'Templates', 'route': '/templates', 'icon': Icons.pages},
+      {'title': 'Reviews', 'route': '/reviews', 'icon': Icons.reviews},
+      {'title': 'Promotions', 'route': '/promotion', 'icon': Icons.campaign},
+    ];
 
-
-  /// **Column Layout for Small Screens (Options on top, Content below)**
-  Widget _buildColumnLayout() {
-    return Column(
-      children: [
-        /// Options at Top
-        Container(
-          width: double.infinity,
-          color: Colors.grey[200],
-          padding: EdgeInsets.symmetric(vertical: 10),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: _buildMenuOptions(),
+    return menuItems.map((item) {
+      return Obx(() {
+        bool isSelected = homeController.selectedRoute.value == item['route'];
+        return Container(
+          margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: ListTile(
+            leading: Icon(
+              item['icon'],
+              color: isSelected ? Colors.blue[800] : Colors.grey[700],
             ),
-          ),
-        ),
-
-        /// Content Below with its own Navigator
-        Expanded(
-          child: Navigator(
-            key: _contentNavigatorKey,
-            onGenerateRoute: (settings) {
-              Widget page;
-              switch (settings.name) {
-                case '/items':
-                  page = MyItems();
-                  break;
-                case '/orders':
-                  page = MyOrders();
-                  break;
-                case '/users':
-                  page = MyUsers();
-                  break;
-                case '/variation':
-                  page = MyVariation();
-                  break;
-                case '/description':
-                  page = MyDescription();
-                  break;
-                case '/coupon':
-                  page=MyCoupons();
-                  break;
-                case '/dashboard':
-                  page=Dashboard();
-                  break;
-                case '/overview':
-                  page=Overview();
-                  break;
-                case '/promotion':
-                  page=PromotionPage();
-                  break;
-                default:
-                  page = Overview();
+            title: Text(
+              item['title'],
+              style: TextStyle(
+                color: isSelected ? Colors.blue[800] : Colors.grey[700],
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+            tileColor: isSelected ? Colors.blue[50] : null,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            onTap: () {
+              _contentNavigatorKey.currentState?.pushReplacementNamed(item['route']);
+              homeController.selectedRoute.value = item['route'];
+              if (MediaQuery.of(context).size.width <= 800) {
+                Navigator.of(context).pop();
+                setState(() {
+                  _isDrawerOpen = false;
+                });
               }
-              return MaterialPageRoute(builder: (_) => page);
             },
           ),
-        ),
-      ],
-    );
-  }
-  /// **Menu Options**
-  List<Widget> _buildMenuOptions() {
-    return [
-      _buildMenuItem('OverView', '/overview'),
-      _buildMenuItem('Dashboard', '/dashboard'),
-      _buildMenuItem('My Items', '/items'),
-      _buildMenuItem('My Orders', '/orders'),
-      _buildMenuItem('My Users', '/users'),
-      _buildMenuItem('My Variation', '/variation'),
-      _buildMenuItem('My Descriptions', '/description'),
-      _buildMenuItem('My Coupons', '/coupon'),
-      _buildMenuItem('Promotion', '/promotion'),
-    ];
-  }
-
-  /// **Menu Item Builder**
-  Widget _buildMenuItem(String title, String routeName) {
-    return InkWell(
-      onTap: () {
-        _contentNavigatorKey.currentState?.pushReplacementNamed(routeName);
-        Homecontroller.selectedRoute.value=routeName;
-      },
-      child: Obx((){
-        bool isSelected = Homecontroller.selectedRoute.value==routeName;
-        return Card(
-          color: isSelected?Colors.blue.shade100: null,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-            side: BorderSide(color:isSelected?Colors.blueAccent:  Colors.greenAccent, width: 1),
-          ),
-          child: Padding(
-            padding:EdgeInsets.all(isSelected?15:12),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(fontSize: 14, color:Colors.grey[700]),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
         );
-      })
-    );
+      });
+    }).toList();
   }
 }
-

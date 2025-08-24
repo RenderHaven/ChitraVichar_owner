@@ -1,8 +1,8 @@
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:chitraowner/AddVariation.dart';
 import 'package:chitraowner/HomePage.dart';
-import 'package:flutter/material.dart';
-import 'ApiManagment/ProductApi.dart'; // Make sure this API file is implemented// Ensure this page exists where users can add new variation
-import 'package:get/get.dart';
+import 'ApiManagment/ProductApi.dart';
 
 class MyVariation extends StatefulWidget {
   @override
@@ -11,72 +11,27 @@ class MyVariation extends StatefulWidget {
 
 class _MyVariationState extends State<MyVariation> {
   final TextEditingController _searchController = TextEditingController();
-
   final HomepageController controller = Get.put(HomepageController());
-  String tag='';
+  String tag = '';
+  bool _isLoading = false;
 
-  void initState(){
+  @override
+  void initState() {
     super.initState();
     fetchData();
   }
 
-  void fetchData()async{
-    if(controller.variationList.value==null){
+  Future<void> fetchData() async {
+    if (controller.variationList.value == null) {
       await controller.searchVariations();
     }
-    controller.variationSearchList.value = List.from(controller.variationList.value ?? []);
-  }
-
-  void _showVariationDetails(Map<String, dynamic> variation) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title:  Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(variation['name']),
-              IconButton(onPressed: () => Navigator.pop(context), icon: Icon(Icons.close))
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if(variation.containsKey('options'))for(var option in variation['options'])Text('${option['value']}  ${option['disc']??''}'),
-              SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _deleteVariation(variation['id']);
-                    },
-                    child: Text('Delete'),
-                    style: ElevatedButton.styleFrom(),
-                  ),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _editVariation(variation);
-                    },
-                    child: Text('Edit'),
-                  ),
-                ],
-              )
-            ],
-          ),
-        );
-      },
-    );
+    _filterVariation();
   }
 
   void _filterVariation() {
-    print('filtering for $tag');
-    final variationList=controller.variationList.value??[];
+    final variationList = controller.variationList.value ?? [];
     if (tag.isEmpty) {
-      controller.variationSearchList.value = variationList; // Reset to full list
+      controller.variationSearchList.value = List.from(variationList);
     } else {
       controller.variationSearchList.value = variationList
           .where((variation) => variation['name'].toLowerCase().contains(tag))
@@ -84,149 +39,362 @@ class _MyVariationState extends State<MyVariation> {
     }
   }
 
+  Future<void> _showVariationDetails(Map<String, dynamic> variation) async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return Container(
+          padding: EdgeInsets.all(16),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      variation['name'] ?? 'Variation',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 16),
+                if (variation.containsKey('options'))
+                  ...variation['options'].map<Widget>((option) {
+                    return Container(
+                      padding:
+                          EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                      margin: EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  option['value'] ?? '',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                if (option['disc'] != null &&
+                                    option['disc'].isNotEmpty)
+                                  Text(
+                                    option['disc'],
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          side: BorderSide(color: Colors.red),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _confirmDeleteVariation(variation['id']);
+                        },
+                        child: Text(
+                          'Delete',
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _editVariation(variation);
+                        },
+                        child: Text('Edit'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
-  void _editVariation(Map<String, dynamic> variation) {
-    final TextEditingController nameController =
-    TextEditingController(text: variation['name']);
+  void _confirmDeleteVariation(String id) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Confirm Delete'),
+          content: Text('Are you sure you want to delete this variation?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await _deleteVariation(id);
+              },
+              child: Text(
+                'Delete',
+                style: TextStyle(color: Colors.red),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
+  Future<void> _deleteVariation(String id) async {
+    final result = await VariationApi.removeVariation(id);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(result['message'])),
+    );
+    if (result['success']) {
+      await controller.searchVariations();
+      _filterVariation();
+    }
+  }
+
+  Future<void> _editVariation(Map<String, dynamic> variation) async {
+    final nameController = TextEditingController(text: variation['name']);
     List<VariationOption> currentOptions = [];
 
-    // Initialize controllers for existing options
     for (var option in variation['options']) {
-      TextEditingController valueController = TextEditingController(text: option['value']);
-      TextEditingController discController = TextEditingController(text: option['disc']);
-
       currentOptions.add(VariationOption(
-        valueController: valueController,
-        discController: discController,
+        valueController: TextEditingController(text: option['value']),
+        discController: TextEditingController(text: option['disc']),
         id: option['id'],
         value: option['value'],
         disc: option['disc'],
       ));
     }
-    bool isEditing=false;
-    showDialog(
+
+    await showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
-            return AlertDialog(
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Edit Variation'),
-                  IconButton(onPressed: () {
-                    // Dispose all controllers before closing the dialog
-                    for (var option in currentOptions) {
-                      option.valueController.dispose();
-                      option.discController.dispose();
-                    }
-                    nameController.dispose();
-                    Navigator.pop(context);
-                  }, icon: Icon(Icons.close))
-                ],
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
               ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Variation Name Field
-                    TextField(
-                      controller: nameController,
-                      decoration: InputDecoration(labelText: 'Variation Name(Display::Identifier)'),
-                    ),
-                    SizedBox(height: 10),
-
-                    // Existing Options Fields
-                    ...currentOptions.map((optionObject) {
-                      return ListTile(
-                        title: TextField(
-                          controller: optionObject.valueController,
-                          decoration: InputDecoration(labelText: 'Value'),
+              child: Container(
+                padding: EdgeInsets.all(16),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Edit Variation',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.close),
+                            onPressed: () {
+                              // Clean up controllers
+                              nameController.dispose();
+                              for (var option in currentOptions) {
+                                option.valueController.dispose();
+                                option.discController.dispose();
+                              }
+                              Navigator.pop(context);
+                            },
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 16),
+                      TextField(
+                        controller: nameController,
+                        decoration: InputDecoration(
+                          labelText: 'Variation Name (Display::Identifier)',
+                          border: OutlineInputBorder(),
                         ),
-                        subtitle:TextField(
-                          controller: optionObject.discController,
-                          decoration: InputDecoration(labelText: 'description'),
-                        ) ,
-                        contentPadding: EdgeInsets.symmetric(vertical: 5),
-                        trailing: IconButton(
-                          icon: Icon(Icons.delete),
-                          onPressed: () {
-                            setState(() {
-                              // Dispose of the controller before removing the option
-                              optionObject.valueController.dispose();
-                              optionObject.discController.dispose();
-
-                              currentOptions =
-                                  currentOptions.where((o) => o != optionObject).toList();
-                            });
-                          },
+                      ),
+                      SizedBox(height: 16),
+                      Text(
+                        'Options',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
                         ),
-                      );
-                    }).toList(),
+                      ),
+                      SizedBox(height: 8),
+                      ...currentOptions.map((option) {
+                        return Column(
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  flex: 2,
+                                  child: TextField(
+                                    controller: option.valueController,
+                                    decoration: InputDecoration(
+                                      labelText: 'Value',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  flex: 3,
+                                  child: TextField(
+                                    controller: option.discController,
+                                    decoration: InputDecoration(
+                                      labelText: 'Description',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: Icon(Icons.delete, color: Colors.red),
+                                  onPressed: () {
+                                    setState(() {
+                                      option.valueController.dispose();
+                                      option.discController.dispose();
+                                      currentOptions.remove(option);
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 8),
+                          ],
+                        );
+                      }).toList(),
+                      ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            currentOptions.add(VariationOption(
+                              valueController: TextEditingController(),
+                              discController: TextEditingController(),
+                              id: 'New',
+                            ));
+                          });
+                        },
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.add),
+                            SizedBox(width: 8),
+                            Text('Add Option'),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: _isLoading
+                              ? null
+                              : () async {
+                                  final newName = nameController.text.trim();
+                                  if (newName.isEmpty ||
+                                      currentOptions.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                            'Variation name and at least one option are required'),
+                                      ),
+                                    );
+                                    return;
+                                  }
 
-                    // Button to add new options
-                    ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          TextEditingController valueController = TextEditingController();
-                          TextEditingController discController = TextEditingController();
-                          currentOptions = [
-                            ...currentOptions,
-                            VariationOption(valueController:valueController,discController: discController, id: 'New')
-                          ];
-                        });
-                      },
-                      child: Icon(Icons.add),
-                    ),
-                  ],
+                                  List<Map<String, dynamic>> updatedOptions =
+                                      currentOptions.map((option) {
+                                    return {
+                                      'id': option.id,
+                                      'value':
+                                          option.valueController.text.trim(),
+                                      'disc': option.discController.text.trim(),
+                                    };
+                                  }).toList();
+
+                                  setState(() => _isLoading = true);
+                                  final result =
+                                      await VariationApi.editVariation(
+                                    variation['id'],
+                                    newName,
+                                    updatedOptions,
+                                  );
+
+                                  if (result['success']) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                          content: Text(result['message'])),
+                                    );
+                                    Navigator.pop(context);
+                                    await controller.searchVariations();
+                                    _filterVariation();
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text(result['error'])),
+                                    );
+                                  }
+                                  setState(() => _isLoading = false);
+                                },
+                          child: _isLoading
+                              ? CircularProgressIndicator(color: Colors.white)
+                              : Text('Save Changes'),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              actions: [
-                ElevatedButton(
-                  onPressed: () async {
-                    if(isEditing)return;
-                    final newName = nameController.text.trim();
-
-                    if (newName.isEmpty || currentOptions.isEmpty) {
-                      Homepage.showOverlayMessage(context, 'Variation name and at least one option are required');
-                      return;
-                    }
-
-                    // Process and sanitize updated options
-                    List<Map<String, dynamic>> updatedOptions = currentOptions.map((optionObject) {
-                      String value = optionObject.valueController.text.trim();
-                      String? disc = optionObject.discController.text.trim();
-                      return {'id': optionObject.id, 'value': value, 'disc': disc};
-                    }).toList();
-                    setState((){
-                      isEditing=true;
-                    });
-                    final result = await VariationApi.editVariation(
-                      variation['id'],
-                      newName,
-                      updatedOptions,
-                    );
-
-                    if (result['success']) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(result['message'])),
-                      );
-                      Navigator.pop(context);
-                      await controller.searchVariations();
-                      _filterVariation();
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(result['error'])),
-                      );
-                    }
-                    setState((){
-                      isEditing=false;
-                    });
-                  },
-                  child: isEditing?CircularProgressIndicator():Text('Save'),
-                ),
-              ],
             );
           },
         );
@@ -234,120 +402,200 @@ class _MyVariationState extends State<MyVariation> {
     );
   }
 
-
-
-  void _deleteVariation(String id) async {
-    final result = await VariationApi.removeVariation(id);
-    if (result['success']) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result['message'])),
-      );
-      await controller.searchVariations();
-      _filterVariation();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result['error'])),
-      );
-    }
-  }
-
-  // Navigate to the page to add new variation
-  void _addNewVariation() {
-    showDialog(
+  Future<void> _addNewVariation() async {
+    await showModalBottomSheet(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Add New Variation'),
-              IconButton(onPressed: () => Navigator.pop(context), icon: Icon(Icons.close))
-            ],
-          ),
-          content: AddVariationPage(),
-        );
-      },
-    ).then((value)async{
-      _filterVariation();
+      isScrollControlled: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => AddVariationPage(),
+    ).then((v) async {
+      if (v == 'Done') {
+        await controller.searchVariations();
+        _filterVariation();
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      floatingActionButton: Obx((){return CircleAvatar(backgroundColor: Colors.blue, child: Text('${controller.variationSearchList.value?.length??'NA'}'));}),
+      backgroundColor: Colors.grey[50],
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.blue,
+        child: Icon(Icons.add, color: Colors.white),
+        onPressed: _addNewVariation,
+      ),
       appBar: AppBar(
-        title: Row(
-          children: [
-            Text('My Variations'),
-            IconButton(onPressed:()=> controller.searchVariations(), icon: Icon(Icons.refresh))
-          ],
-        ),
+        title: Text('Product Variations',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
-            icon: Icon(Icons.add),
-            onPressed: _addNewVariation, // Open Add Variation page when tapped
+            icon: Icon(Icons.refresh),
+            onPressed: () async {
+              await controller.searchVariations();
+              _filterVariation();
+            },
           ),
         ],
       ),
       body: Padding(
-        padding: EdgeInsets.all(8.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                labelText: 'Search by Variation Name',
-                suffixIcon: IconButton(
-                  icon: Icon(Icons.search),
-                  onPressed: (){
-                    tag=_searchController.text.toLowerCase()??'';
-                    _filterVariation();
-                  },
-                ),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: Offset(0, 5),
+                  ),
+                ],
               ),
-              // onSubmitted: (value) {
-              //   // Trigger search when Enter is pressed
-              //   _filterVariation();
-              // },
-              onChanged:(v){
-                tag=_searchController.text.toLowerCase()??'';
-                _filterVariation();
-              },
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  hintText: 'Search variations...',
+                  prefixIcon: Icon(Icons.search, color: Colors.grey),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: Icon(Icons.clear, size: 20),
+                          onPressed: () {
+                            _searchController.clear();
+                            tag = '';
+                            _filterVariation();
+                          },
+                        )
+                      : null,
+                  border: InputBorder.none,
+                ),
+                onChanged: (value) {
+                  tag = value.toLowerCase();
+                  _filterVariation();
+                },
+              ),
             ),
-            SizedBox(height: 20),
-            Obx((){
-              return controller.isVariationLoading.value
-                  ? CircularProgressIndicator()
-                  : Expanded(
-                child: (controller.variationSearchList.value??[]).isNotEmpty?ListView.builder(
-                  itemCount: controller.variationSearchList.value?.length??0,
+            SizedBox(height: 16),
+            Expanded(
+              child: Obx(() {
+                if (controller.isVariationLoading.value) {
+                  return Center(child: CircularProgressIndicator());
+                }
+
+                final variations = controller.variationSearchList.value ?? [];
+                if (variations.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.category, size: 48, color: Colors.grey[400]),
+                        SizedBox(height: 16),
+                        Text(
+                          tag.isEmpty
+                              ? 'No variations available'
+                              : 'No matching variations found',
+                          style:
+                              TextStyle(color: Colors.grey[600], fontSize: 16),
+                        ),
+                        if (tag.isNotEmpty) ...[
+                          SizedBox(height: 8),
+                          TextButton(
+                            onPressed: () {
+                              _searchController.clear();
+                              tag = '';
+                              _filterVariation();
+                            },
+                            child: Text('Clear search'),
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                }
+
+                return ListView.separated(
+                  itemCount: variations.length,
+                  separatorBuilder: (context, index) => SizedBox(height: 12),
                   itemBuilder: (context, index) {
-                    final result = controller.variationSearchList.value?[index]??{};
-                    return result.containsKey('name')?Card(
-                      child: ListTile(
-                        title: Text(result['name'] ?? 'Unknown'),
-                        onTap: () {
-                          _showVariationDetails(result);
-                        }
-                      ),
-                    ):Text('NO DATA');
+                    final variation = variations[index];
+                    return _buildVariationCard(variation);
                   },
-                ):Text('NO DATA'),
-              );
-            })
+                );
+              }),
+            ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVariationCard(Map<String, dynamic> variation) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _showVariationDetails(variation),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    variation['name'] ?? 'Untitled',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, color: Colors.grey),
+                ],
+              ),
+              SizedBox(height: 8),
+              if (variation.containsKey('options') &&
+                  variation['options'].isNotEmpty)
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: variation['options'].map<Widget>((option) {
+                    return Chip(
+                      label: Text(option['value'] ?? ''),
+                      backgroundColor: Colors.blue[50],
+                      labelStyle: TextStyle(color: Colors.blue[800]),
+                    );
+                  }).toList(),
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class VariationOption{
+class VariationOption {
   TextEditingController valueController;
   TextEditingController discController;
   String id;
   String? value;
   String? disc;
-  VariationOption({required this.valueController,required this.discController,this.id='New',this.disc,this.value});
+
+  VariationOption({
+    required this.valueController,
+    required this.discController,
+    this.id = 'New',
+    this.disc,
+    this.value,
+  });
 }

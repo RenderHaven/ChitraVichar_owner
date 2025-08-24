@@ -1,51 +1,45 @@
-import 'dart:convert';
+// ShowItems.dart
 import 'package:chitraowner/AddIteamsToProduct.dart';
-import 'package:chitraowner/HomePage.dart';
 import 'package:chitraowner/IteamView.dart';
-import 'package:chitraowner/additeam.dart';
 import 'package:flutter/material.dart';
 import 'ApiManagment/ProductApi.dart';
 import 'EditItem.dart';
+import 'HomePage.dart';
+import 'Tools.dart';
 
 class ShowItems extends StatefulWidget {
-  String productId; // Category ID passed as a parameter
-
-  // Constructor to accept the categoryId
-  ShowItems({this.productId = 'Cat1'});
+  final String productId;
+  
+  const ShowItems({
+    this.productId = 'Cat1',
+    Key? key,
+  }) : super(key: key);
 
   @override
-  State<ShowItems> createState() => _State();
+  State<ShowItems> createState() => _ShowItemsState();
 }
 
-class _State extends State<ShowItems> {
-  List<Map<String, dynamic>> items_data = []; // List to store products
-  bool isLoading = true; // Track loading state
-  bool isShow=true;
+class _ShowItemsState extends State<ShowItems> {
+  List<Map<String, dynamic>> itemsData = [];
+  bool isLoading = true;
+  bool showDeleteConfirmation = true;
+
   @override
   void initState() {
     super.initState();
-    fetchIteams(); // Fetch products when the screen is loaded
+    _fetchItems();
   }
 
-  // Function to fetch products by category
-  Future<void> fetchIteams() async {
-    setState(() {
-      isLoading = true;
-    });
-
-
-    try{
-      var response = await ProductApi.getItemsByProduct(widget.productId);
-      setState(() {
-        items_data=response;
-        isLoading = false;
-      });
-    } catch(e) {
-      setState(() {
-        isLoading = false;
-      });
-      // Handle error here
-      print('Error: $e');
+  Future<void> _fetchItems() async {
+    setState(() => isLoading = true);
+    
+    try {
+      final response = await ProductApi.getItemsByProduct(widget.productId);
+      setState(() => itemsData = response);
+    } catch (e) {
+      Homepage.showOverlayMessage(context, 'Error loading items: $e');
+    } finally {
+      setState(() => isLoading = false);
     }
   }
 
@@ -54,182 +48,252 @@ class _State extends State<ShowItems> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-            height: 25,
-            padding: EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: Colors.cyan,
-              borderRadius: BorderRadius.circular(5),
-            ),
-            child: Text("Items(${items_data.length})",style: TextStyle(fontWeight: FontWeight.bold),)
-        ),
-        if (isLoading)
-          Center(child: CircularProgressIndicator()), // Show loading indicator
-        if (!isLoading && items_data.isEmpty)
-          Center(child: Text('No Item found')), // Show message if no items_data
-        if (!isLoading && items_data.isNotEmpty)
-          SizedBox(
-            height: 500, // Set your max height here
-            child: GridView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: items_data.length,
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2, // Number of columns
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-                childAspectRatio: 3/2 // Adjust for card shape
-              ),
-              itemBuilder: (context, index) {
-                return ItemCard(item: items_data[index]);
-              },
-            ),
-          ),
-        IconButton(
-          onPressed: () {
-            showModalBottomSheet(
-                context: context,
-                clipBehavior: Clip.hardEdge,
-                builder: (BuildContext context) {
-              return Padding(
-                padding: const EdgeInsets.all(5.0),
-                child: AddItemsToProduct(productId: widget.productId,MyItemsId:items_data.map((d)=>d["i_id"].toString()).toList(),), // You can pass 'product' or 'item' based on the need
-              );
-            }
-            ).then((_) {
-              // This block will run when the dialog is popped
-              fetchIteams(); // Re-fetch items_data after the dialog is closed
-            });
-          },
-          icon: Icon(Icons.add),
-        ),
+        _buildHeader(),
+        const SizedBox(height: 16),
+        _buildItemsGrid(),
       ],
     );
   }
 
-  Widget ItemCard({
-    required Map<String, dynamic> item,
-  }) {
-    String itemName = item['name'] ?? 'No name available';
-    String itemImage = item['image_url']??"https://upload.wikimedia.org/wikipedia/commons/1/14/No_Image_Available.jpg?20200913095930";  // Default image if not available
-    // Decode the product image if available
-    Widget productImageWidget;
-    if (itemImage.isNotEmpty) {
-      try {
-        productImageWidget=Image.network(itemImage);
-      } catch (e) {
-        productImageWidget = Icon(Icons.not_interested); // Fallback if image decoding fails
-      }
-    } else {
-      productImageWidget = Icon(Icons.not_interested); // Fallback if no image
-    }
-
-    // Delete confirmation dialog
-    Future<void> _showDeleteConfirmation(BuildContext context) async {
-      bool confirm =isShow?await showDialog(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: Text('Remove Item'),
-            content: Text('Are you sure you want to remove this item?'),
-            actions: [
-              TextButton(onPressed:(){isShow=!isShow;}, child:Text("Don't show again"),),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: Text('Remove'),
-              ),
-            ],
-          );
-        },
-      ) ?? false:true;
-
-      if (confirm) {
-        // Call delete function
-        try {
-          final x=await ProductApi.removeItemFromProduct(itemId: item['i_id'],productId: widget.productId!);
-          if(x)Homepage.showOverlayMessage(context, 'Item removed successfully');
-          else throw();
-        } catch (e) {
-          Homepage.showOverlayMessage(context, 'Failed to remove product: $e');
-        }
-      }
-    }
-
-    return Card(
-      elevation: 4.0,
-      child: InkWell(
-        onTap: () {
-          Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => ItemViewPage(itemId:item['i_id']))
-          );
-        },
-        child: Container(
-          // color: Colors.blue,
-          width: 150,
-          height: 200,
-          child: Stack(
-            children: [
-              Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 120,
-                      height: 120,
-                      child: productImageWidget,
-                    ),
-                    SizedBox(height: 10),
-                    Text(
-                      itemName,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      "Price: ${item['price']}",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              Positioned(
-                bottom: 0,
-                left: 0,
-                child: IconButton(
-                  icon: Icon(Icons.remove, color: Colors.red),
-                  onPressed: () => _showDeleteConfirmation(context).then((_){
-                    fetchIteams();
-                  }),
-                ),
-              ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: IconButton(
-                  icon: Icon(Icons.edit_outlined),
-                  onPressed: () {
-                    showDialog(context: context,
-                        builder: (context)=>AlertDialog(
-                          contentPadding: EdgeInsets.all(5),
-                          title: Text('Edit Item Data'),
-                          content: EditItem(itemId: item['i_id'],),
-                        )).then((v){
-                        if(v=='Done')fetchIteams();
-                    });
-                  },
-                ),
-              ),
-            ],
+  Widget _buildHeader() {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.blue[50],
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.blue[100]!),
           ),
+          child: Text(
+            "Items (${itemsData.length})",
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.blue,
+            ),
+          ),
+        ),
+        IconButton(onPressed: _showAddItemSheet, icon: Icon(Icons.add))
+      ],
+    );
+  }
+
+  Widget _buildItemsGrid() {
+    if (isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    
+    if (itemsData.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey[50],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Center(
+          child: Text(
+            'No items found',
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
+      );
+    }
+    
+    return SizedBox(
+      height: 500,
+      child: GridView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: itemsData.length,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 1.2,
+        ),
+        itemBuilder: (context, index) => _buildItemCard(itemsData[index]),
+      ),
+    );
+  }
+
+  Widget _buildItemCard(Map<String, dynamic> item) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ItemViewPage(itemId: item['i_id']),
+          ),
+        ),
+        child: Stack(
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(12)),
+                    child: item['image_url']?.isNotEmpty == true
+                        ? ClickableImageNetwork(imageUrl: item['image_url'])
+                        : Container(
+                            color: Colors.grey[200],
+                            child: const Center(
+                              child: Icon(Icons.image, size: 48, color: Colors.grey),
+                            ),
+                          ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item['name'] ?? 'No name',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '₹${item['price'] ?? 'N/A'}',
+                        style: TextStyle(
+                          color: Colors.green[700],
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: IconButton(
+                icon: const Icon(Icons.edit, size: 20),
+                onPressed: () => _showEditItemSheet(item['i_id']),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.white.withOpacity(0.9),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 8,
+              right: 8,
+              child: IconButton(
+                icon: const Icon(Icons.delete, size: 20, color: Colors.red),
+                onPressed: () => _confirmItemRemoval(item),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.white.withOpacity(0.9),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
+  }
+
+ 
+  void _showEditItemSheet(String itemId) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom, // Accounts for keyboard
+        ),
+        child: EditItem(itemId: itemId),
+      ),
+    );
+  }
+
+  void _showAddItemSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom, // Accounts for keyboard
+        ),
+        child:  AddItemsToProduct(
+          productId: widget.productId,
+          MyItemsId: itemsData.map((d) => d["i_id"].toString()).toList(),
+        ),
+      ),
+    ).then((_) => _fetchItems());
+    
+  }
+
+  Future<void> _confirmItemRemoval(Map<String, dynamic> item) async {
+    if (!showDeleteConfirmation) {
+      await _removeItem(item);
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove Item'),
+        content: const Text('Are you sure you want to remove this item?'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context, false);
+            },
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context, true);
+            },
+            child: const Text('Remove', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    ) ?? false;
+
+    if (confirmed) await _removeItem(item);
+  }
+
+  Future<void> _removeItem(Map<String, dynamic> item) async {
+    try {
+      final success = await ProductApi.removeItemFromProduct(
+        itemId: item['i_id'],
+        productId: widget.productId,
+      );
+      
+      if (success) {
+        Homepage.showOverlayMessage(context, 'Item removed successfully');
+        _fetchItems();
+      } else {
+        throw Exception('Failed to remove item');
+      }
+    } catch (e) {
+      Homepage.showOverlayMessage(context, 'Failed to remove item: $e');
+    }
   }
 }

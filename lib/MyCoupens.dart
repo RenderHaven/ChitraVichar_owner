@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-
-import 'ApiManagment/ProductApi.dart';
-import 'HomePage.dart';
+import 'package:chitraowner/ApiManagment/ProductApi.dart';
+import 'package:chitraowner/HomePage.dart';
 
 class MyCoupons extends StatefulWidget {
   @override
@@ -13,6 +12,7 @@ class _MyCouponsState extends State<MyCoupons> {
   final TextEditingController _searchController = TextEditingController();
   final HomepageController controller = Get.put(HomepageController());
   String searchQuery = '';
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -20,170 +20,361 @@ class _MyCouponsState extends State<MyCoupons> {
     fetchData();
   }
 
-  void fetchData() async {
+  Future<void> fetchData() async {
     if (controller.couponList.value == null) {
       await controller.fetchCoupons();
     }
-    controller.couponSearchList.value = List.from(controller.couponList.value ?? []);
+    _filterCoupons();
   }
 
   void _filterCoupons() {
-    print('Filtering for $searchQuery');
     final couponList = controller.couponList.value ?? [];
     if (searchQuery.isEmpty) {
-      controller.couponSearchList.value = couponList;
+      controller.couponSearchList.value = List.from(couponList);
     } else {
       controller.couponSearchList.value = couponList
           .where((coupon) =>
-          coupon['code'].toLowerCase().contains(searchQuery.toLowerCase()))
+              coupon['code'].toLowerCase().contains(searchQuery.toLowerCase()))
           .toList();
     }
   }
 
-  void _addNewCoupon() {
-    final TextEditingController codeController = TextEditingController();
-    final TextEditingController discountController = TextEditingController();
-    final TextEditingController maxUsesController = TextEditingController();
-    final TextEditingController minOrderAmountController = TextEditingController();
-    String selectedDiscountType = 'percentage'; // Default value
-    bool isAdding = false;
+  Future<void> _addNewCoupon() async {
+    final codeController = TextEditingController();
+    final discountController = TextEditingController();
+    final maxUsesController = TextEditingController(text: '1');
+    final minOrderAmountController = TextEditingController(text: '0');
+    String selectedDiscountType = 'percentage';
 
-    showDialog(
+    await showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (context) {
         return StatefulBuilder(
-          builder: (context,setState) {
-            return AlertDialog(
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Add New Coupon'),
-                  IconButton(onPressed: () => Navigator.pop(context), icon: Icon(Icons.close))
-                ],
+          builder: (context, setState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: codeController,
-                    decoration: InputDecoration(labelText: 'Coupon Code'),
-                  ),
-                  TextField(
-                    controller: discountController,
-                    decoration: InputDecoration(labelText: 'Discount Amount'),
-                    keyboardType: TextInputType.number,
-                  ),
-                  DropdownButtonFormField<String>(
-                    value: selectedDiscountType,
-                    items: ['fixed', 'percentage']
-                        .map((type) => DropdownMenuItem(value: type, child: Text(type.capitalize!)))
-                        .toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        selectedDiscountType = value;
-                      }
-                    },
-                    decoration: InputDecoration(labelText: 'Discount Type'),
-                  ),
-                  TextField(
-                    controller: maxUsesController,
-                    decoration: InputDecoration(labelText: 'Max Uses'),
-                    keyboardType: TextInputType.number,
-                  ),
-                  TextField(
-                    controller: minOrderAmountController,
-                    decoration: InputDecoration(labelText: 'Min Order Amount'),
-                    keyboardType: TextInputType.number,
-                  ),
-                ],
-              ),
-              actions: [
-                ElevatedButton(
-                  onPressed: () async {
-                    print(isAdding);
-                    if (isAdding) return;
-                    setState(() {
-                      isAdding = true;
-                    });
-                    final code = codeController.text.trim();
-                    final discount = discountController.text.trim();
-                    final maxUses = maxUsesController.text.trim();
-                    final minOrderAmount = minOrderAmountController.text.trim();
+              child: Container(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Create New Coupon',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.close),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 16),
+                    TextField(
+                      controller: codeController,
+                      decoration: InputDecoration(
+                        labelText: 'Coupon Code',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: TextField(
+                            controller: discountController,
+                            decoration: InputDecoration(
+                              labelText: 'Discount Amount',
+                              border: OutlineInputBorder(),
+                            ),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                        SizedBox(width: 16),
+                        Expanded(
+                          flex: 2,
+                          child: DropdownButtonFormField<String>(
+                            value: selectedDiscountType,
+                            items: ['percentage', 'fixed']
+                                .map((type) => DropdownMenuItem(
+                                      value: type,
+                                      child: Text(type.capitalize!),
+                                    ))
+                                .toList(),
+                            onChanged: (value) {
+                              if (value != null) {
+                                setState(() {
+                                  selectedDiscountType = value;
+                                });
+                              }
+                            },
+                            decoration: InputDecoration(
+                              labelText: 'Type',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 16),
+                    TextField(
+                      controller: maxUsesController,
+                      decoration: InputDecoration(
+                        labelText: 'Max Uses (0 for unlimited)',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                    SizedBox(height: 16),
+                    TextField(
+                      controller: minOrderAmountController,
+                      decoration: InputDecoration(
+                        labelText: 'Min Order Amount',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                    SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: _isLoading
+                            ? null
+                            : () async {
+                                final code = codeController.text.trim();
+                                final discount = discountController.text.trim();
 
-                    if (code.isEmpty || discount.isEmpty) {
-                      Homepage.showOverlayMessage(context, 'Code and discount cannot be empty');
-                      return;
-                    }
+                                if (code.isEmpty || discount.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                          'Code and discount are required'),
+                                    ),
+                                  );
+                                  return;
+                                }
 
-                    final data = {
-                      'code': code,
-                      'discount_amount': double.parse(discount),
-                      'discount_type': selectedDiscountType,
-                      'max_uses': maxUses.isNotEmpty ? int.parse(maxUses) : 1,
-                      'min_order_amount': minOrderAmount.isNotEmpty ? double.parse(minOrderAmount) : 0,
-                    };
-                    final result = await CouponApi.addCoupon(data);
+                                setState(() => _isLoading = true);
+                                final data = {
+                                  'code': code,
+                                  'discount_amount': double.parse(discount),
+                                  'discount_type': selectedDiscountType,
+                                  'max_uses': maxUsesController.text
+                                          .trim()
+                                          .isNotEmpty
+                                      ? int.parse(maxUsesController.text.trim())
+                                      : 1,
+                                  'min_order_amount': minOrderAmountController
+                                          .text
+                                          .trim()
+                                          .isNotEmpty
+                                      ? double.parse(
+                                          minOrderAmountController.text.trim())
+                                      : 0,
+                                };
 
-                    if (result) {
-                      Homepage.showOverlayMessage(context, "Coupon Added");
-                      Navigator.pop(context);
-                      await controller.fetchCoupons();
-                      _filterCoupons();
-                    } else {
-                      Homepage.showOverlayMessage(context, "Error adding coupon");                    }
+                                final result = await CouponApi.addCoupon(data);
 
-                    setState(() {
-                      isAdding = false;
-                    });
-                  },
-                  child: isAdding ? CircularProgressIndicator() : Text('Save'),
+                                if (result) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content:
+                                            Text('Coupon added successfully')),
+                                  );
+                                  Navigator.pop(context);
+                                  await controller.fetchCoupons();
+                                  _filterCoupons();
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content: Text('Failed to add coupon')),
+                                  );
+                                }
+                                setState(() => _isLoading = false);
+                              },
+                        child: _isLoading
+                            ? CircularProgressIndicator(color: Colors.white)
+                            : Text('Create Coupon'),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             );
-          }
+          },
         );
       },
     );
   }
 
-  void _showCouponDetails(Map<String, dynamic> coupon) {
+  Future<void> _showCouponDetails(Map<String, dynamic> coupon) async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return Container(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    coupon['code'],
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              SizedBox(height: 16),
+              Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    _buildCouponDetailRow(
+                      'Discount',
+                      '${coupon['discount_amount']} ${coupon['discount_type'] == 'percentage' ? '%' : '₹'}',
+                    ),
+                    Divider(),
+                    _buildCouponDetailRow(
+                      'Max Uses',
+                      coupon['max_uses'] == 0
+                          ? 'Unlimited'
+                          : coupon['max_uses'].toString(),
+                    ),
+                    Divider(),
+                    _buildCouponDetailRow(
+                      'Min Order',
+                      '₹${coupon['min_order_amount']}',
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        side: BorderSide(color: Colors.red),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _confirmDeleteCoupon(coupon['id']);
+                      },
+                      child: Text(
+                        'Delete',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _editCoupon(coupon);
+                      },
+                      child: Text('Edit'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCouponDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 14,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteCoupon(String id) {
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(coupon['code']),
-              IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: Icon(Icons.close))
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text("Discount Amount: ${coupon['discount_amount']}"),
-              Text("Discount Type: ${coupon['discount_type']}"),
-              Text("Max Uses: ${coupon['max_uses']}"),
-              Text("Min Order Amount: ${coupon['min_order_amount']}"),
-            ],
-          ),
+          title: Text('Confirm Delete'),
+          content: Text('Are you sure you want to delete this coupon?'),
           actions: [
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _deleteCoupon(coupon['id']);
-              },
-              child: Text('Delete'),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancel'),
             ),
-            ElevatedButton(
-              onPressed: () {
+            TextButton(
+              onPressed: () async {
                 Navigator.pop(context);
-                _editCoupon(coupon);
+                await _deleteCoupon(id);
               },
-              child: Text('Edit'),
+              child: Text(
+                'Delete',
+                style: TextStyle(color: Colors.red),
+              ),
             ),
           ],
         );
@@ -191,180 +382,405 @@ class _MyCouponsState extends State<MyCoupons> {
     );
   }
 
-  void _editCoupon(Map<String, dynamic> coupon) {
-    final TextEditingController codeController =
-    TextEditingController(text: coupon['code']);
-    final TextEditingController discountController =
-    TextEditingController(text: coupon['discount_amount'].toString());
-    final TextEditingController maxUsesController =
-    TextEditingController(text: coupon['max_uses'].toString());
-    final TextEditingController minOrderAmountController =
-    TextEditingController(text: coupon['min_order_amount'].toString());
-    String selectedDiscountType = coupon['discount_type'].toString(); // Default value
-    bool isSaving = false;
+  Future<void> _deleteCoupon(String id) async {
+    final result = await CouponApi.deleteCoupon(id);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text(result ? 'Coupon deleted' : 'Failed to delete coupon')),
+    );
+    if (result) {
+      await controller.fetchCoupons();
+      _filterCoupons();
+    }
+  }
 
-    showDialog(
+  Future<void> _editCoupon(Map<String, dynamic> coupon) async {
+    final codeController = TextEditingController(text: coupon['code']);
+    final discountController =
+        TextEditingController(text: coupon['discount_amount'].toString());
+    final maxUsesController =
+        TextEditingController(text: coupon['max_uses'].toString());
+    final minOrderAmountController =
+        TextEditingController(text: coupon['min_order_amount'].toString());
+    String selectedDiscountType = coupon['discount_type'];
+
+    await showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (context) {
         return StatefulBuilder(
-          builder: (context,setState) {
-            return AlertDialog(
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Edit Coupon'),
-                  IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: Icon(Icons.close))
-                ],
+          builder: (context, setState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: codeController,
-                    decoration: InputDecoration(labelText: 'Coupon Code'),
-                  ),
-                  TextField(
-                    controller: discountController,
-                    decoration: InputDecoration(labelText: 'Discount Amount'),
-                    keyboardType: TextInputType.number,
-                  ),
-                  DropdownButtonFormField<String>(
-                    value: selectedDiscountType,
-                    items: ['fixed', 'percentage']
-                        .map((type) => DropdownMenuItem(value: type, child: Text(type.capitalize!)))
-                        .toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        selectedDiscountType = value;
-                      }
-                    },
-                    decoration: InputDecoration(labelText: 'Discount Type'),
-                  ),
-                  TextField(
-                    controller: maxUsesController,
-                    decoration: InputDecoration(labelText: 'Max Uses'),
-                    keyboardType: TextInputType.number,
-                  ),
-                  TextField(
-                    controller: minOrderAmountController,
-                    decoration: InputDecoration(labelText: 'Min Order Amount'),
-                    keyboardType: TextInputType.number,
-                  ),
-                ],
-              ),
-              actions: [
-                ElevatedButton(
-                  onPressed: () async {
-                    if (isSaving) return;
-                    final newCode = codeController.text.trim();
-                    final newDiscount = discountController.text.trim();
+              child: Container(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Edit Coupon',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.close),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 16),
+                    TextField(
+                      controller: codeController,
+                      decoration: InputDecoration(
+                        labelText: 'Coupon Code',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: TextField(
+                            controller: discountController,
+                            decoration: InputDecoration(
+                              labelText: 'Discount Amount',
+                              border: OutlineInputBorder(),
+                            ),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                        SizedBox(width: 16),
+                        Expanded(
+                          flex: 2,
+                          child: DropdownButtonFormField<String>(
+                            value: selectedDiscountType,
+                            items: ['percentage', 'fixed']
+                                .map((type) => DropdownMenuItem(
+                                      value: type,
+                                      child: Text(type.capitalize!),
+                                    ))
+                                .toList(),
+                            onChanged: (value) {
+                              if (value != null) {
+                                setState(() {
+                                  selectedDiscountType = value;
+                                });
+                              }
+                            },
+                            decoration: InputDecoration(
+                              labelText: 'Type',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 16),
+                    TextField(
+                      controller: maxUsesController,
+                      decoration: InputDecoration(
+                        labelText: 'Max Uses (0 for unlimited)',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                    SizedBox(height: 16),
+                    TextField(
+                      controller: minOrderAmountController,
+                      decoration: InputDecoration(
+                        labelText: 'Min Order Amount',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                    SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: _isLoading
+                            ? null
+                            : () async {
+                                final code = codeController.text.trim();
+                                final discount = discountController.text.trim();
 
-                    if (newCode.isEmpty || newDiscount.isEmpty) {
-                      Homepage.showOverlayMessage(context, 'Code and discount cannot be empty');
-                      return;
-                    }
+                                if (code.isEmpty || discount.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                          'Code and discount are required'),
+                                    ),
+                                  );
+                                  return;
+                                }
 
-                    setState(() {
-                      isSaving = true;
-                    });
-                    final data={
-                      'discount_type':selectedDiscountType,
-                      'code':newCode,
-                      'discount_amount':double.parse(newDiscount),
-                      'max_uses':maxUsesController.text.trim().isNotEmpty ? int.parse(maxUsesController.text.trim()) : 1,
-                      'min_order_amount': minOrderAmountController.text.trim().isNotEmpty
-                          ? double.parse(minOrderAmountController.text.trim())
-                          : 0,
-                    };
-                    final result = await CouponApi.updateCoupon(coupon['id'],data);
+                                setState(() => _isLoading = true);
+                                final data = {
+                                  'code': code,
+                                  'discount_amount': double.parse(discount),
+                                  'discount_type': selectedDiscountType,
+                                  'max_uses': maxUsesController.text
+                                          .trim()
+                                          .isNotEmpty
+                                      ? int.parse(maxUsesController.text.trim())
+                                      : 1,
+                                  'min_order_amount': minOrderAmountController
+                                          .text
+                                          .trim()
+                                          .isNotEmpty
+                                      ? double.parse(
+                                          minOrderAmountController.text.trim())
+                                      : 0,
+                                };
 
-                    if (result) {
-                      Homepage.showOverlayMessage(context, "Coupon Updated");
-                      Navigator.pop(context);
-                      await controller.fetchCoupons();
-                      _filterCoupons();
-                    } else {
-                      Homepage.showOverlayMessage(context, "Error updating coupon");
-                    }
+                                final result = await CouponApi.updateCoupon(
+                                    coupon['id'], data);
 
-                    setState(() {
-                      isSaving = false;
-                    });
-                  },
-                  child: isSaving ? CircularProgressIndicator() : Text('Save'),
+                                if (result) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content: Text(
+                                            'Coupon updated successfully')),
+                                  );
+                                  Navigator.pop(context);
+                                  await controller.fetchCoupons();
+                                  _filterCoupons();
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content:
+                                            Text('Failed to update coupon')),
+                                  );
+                                }
+                                setState(() => _isLoading = false);
+                              },
+                        child: _isLoading
+                            ? CircularProgressIndicator(color: Colors.white)
+                            : Text('Update Coupon'),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             );
-          }
+          },
         );
       },
     );
   }
 
-  void _deleteCoupon(String id) async {
-    final result = await CouponApi.deleteCoupon(id);
-    if (result) {
-      Homepage.showOverlayMessage(context, "Coupon Deleted");
-      await controller.fetchCoupons();
-      _filterCoupons();
-    } else {
-      Homepage.showOverlayMessage(context, "Error deleting coupon");    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      floatingActionButton: Obx((){return CircleAvatar(backgroundColor: Colors.blue, child: Text('${controller.couponSearchList.value?.length??'NA'}'));}),
-      appBar: AppBar(
-        title: Text('My Coupons'),
-        actions: [IconButton(icon: Icon(Icons.add), onPressed: _addNewCoupon)],
+      backgroundColor: Colors.grey[50],
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.blue,
+        child: Icon(Icons.add, color: Colors.white),
+        onPressed: _addNewCoupon,
       ),
-      body: Obx(() => controller.isCouponLoading.value
-          ? Center(child: CircularProgressIndicator())
-          : Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
-              children: [
-                TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    labelText: 'Search by Code',
-                    suffixIcon: IconButton(
-                      icon: Icon(Icons.search),
-                      onPressed: (){
-                        searchQuery=_searchController.text.toLowerCase()??'';
-                        _filterCoupons();
-                      },
+      appBar: AppBar(
+        title: Text('Coupon Management',
+            style: TextStyle(fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh),
+            onPressed: () async {
+              await controller.fetchCoupons();
+              _filterCoupons();
+            },
+          ),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  hintText: 'Search coupons...',
+                  prefixIcon: Icon(Icons.search, color: Colors.grey),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: Icon(Icons.clear, size: 20),
+                          onPressed: () {
+                            _searchController.clear();
+                            searchQuery = '';
+                            _filterCoupons();
+                          },
+                        )
+                      : null,
+                  border: InputBorder.none,
+                ),
+                onChanged: (value) {
+                  searchQuery = value.toLowerCase();
+                  _filterCoupons();
+                },
+              ),
+            ),
+            SizedBox(height: 16),
+            Expanded(
+              child: Obx(() {
+                if (controller.isCouponLoading.value) {
+                  return Center(child: CircularProgressIndicator());
+                }
+
+                final coupons = controller.couponSearchList.value ?? [];
+                if (coupons.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.local_offer,
+                            size: 48, color: Colors.grey[400]),
+                        SizedBox(height: 16),
+                        Text(
+                          searchQuery.isEmpty
+                              ? 'No coupons available'
+                              : 'No matching coupons found',
+                          style:
+                              TextStyle(color: Colors.grey[600], fontSize: 16),
+                        ),
+                        if (searchQuery.isNotEmpty) ...[
+                          SizedBox(height: 8),
+                          TextButton(
+                            onPressed: () {
+                              _searchController.clear();
+                              searchQuery = '';
+                              _filterCoupons();
+                            },
+                            child: Text('Clear search'),
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                }
+
+                return ListView.separated(
+                  itemCount: coupons.length,
+                  separatorBuilder: (context, index) => SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final coupon = coupons[index];
+                    return _buildCouponCard(coupon);
+                  },
+                );
+              }),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCouponCard(Map<String, dynamic> coupon) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _showCouponDetails(coupon),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    coupon['code'],
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  // onSubmitted: (value) {
-                  //   // Trigger search when Enter is pressed
-                  //   _filterVariation();
-                  // },
-                  onChanged:(v){
-                    searchQuery=_searchController.text.toLowerCase()??'';
-                    _filterCoupons();
-                  },
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      coupon['discount_type'] == 'percentage'
+                          ? '${coupon['discount_amount'] ?? 'NA'}% OFF'
+                          : '₹${coupon['discount_amount'] ?? 'NA'} OFF',
+                      style: TextStyle(
+                        color: Colors.blue[800],
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Min Order: ₹${coupon['min_order_amount']}',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 12,
+                    ),
+                  ),
+                  Text(
+                    coupon['max_uses'] == 0
+                        ? 'Unlimited uses'
+                        : 'Max ${coupon['max_uses']} uses',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  coupon['use_count'].toString(),
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                SizedBox(height: 20),
-                Expanded(
-                  child: ListView(
-                          children: controller.couponSearchList.value
-                    ?.map((coupon) => Card(
-                      child: ListTile(
-                                title: Text(coupon['code']),
-                                onTap: () => _showCouponDetails(coupon),
-                              ),
-                    ))
-                    .toList() ??
-                    [],
-                        ),
-                ),
-              ],
-            ),
-          )),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

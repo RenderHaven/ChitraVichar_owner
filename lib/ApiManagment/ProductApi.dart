@@ -1,10 +1,34 @@
 import 'dart:convert';
+import 'dart:typed_data';
+import 'package:chitraowner/HomePage.dart';
 import 'package:http/http.dart' as http;
+import 'package:chitraowner/main.dart';
 
-const String apiUrl ="https://chitravichar-api.onrender.com"; //"http://127.0.0.1:5000";//
-const String _apiKey='<@pap@a123>';
+const String apiUrl =
+    "http://127.0.0.1:5000"; //"https://chitravichar-api.onrender.com";//////// //"http://127.0.0.1:5000";//
+String apiKey = 'NAA'; //<@pap@a123>
 
-class HomeApi{
+class HomeApi {
+  static Future<bool> validateKey(String Key) async {
+    try {
+      final response = await http.get(
+        Uri.parse("$apiUrl/home/get_auth"),
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-KEY": Key, // Security key always included
+        },
+      );
+      if (response.statusCode == 200) {
+        apiKey = Key;
+        return true;
+      } else {
+        return false;
+      }
+    } catch (e) {
+      print('Error: $e');
+      return false;
+    }
+  }
 
   static Future<String> sendEmail({
     required List<String> recipients,
@@ -16,7 +40,7 @@ class HomeApi{
         Uri.parse('$apiUrl/home/send_email'),
         headers: {
           'Content-Type': 'application/json',
-          'X-API-KEY': _apiKey, // If your API requires it
+          'X-API-KEY': apiKey, // If your API requires it
         },
         body: jsonEncode({
           'emails': recipients,
@@ -28,10 +52,9 @@ class HomeApi{
       if (response.statusCode == 200) {
         print('Email sent successfully!');
         return 'Mail Sent';
-      } else if(response.statusCode == 500){
+      } else if (response.statusCode == 500) {
         return 'Wrong Email';
-      }
-      else {
+      } else {
         print('Failed to send email: ${response.statusCode}');
         print('Response: ${response.body}');
         return 'Failed';
@@ -42,14 +65,13 @@ class HomeApi{
     }
   }
 
-
   static Future<Map<String, dynamic>> getSummery() async {
     try {
       final response = await http.get(
         Uri.parse('$apiUrl/home/get_summery'),
         headers: {
           "Content-Type": "application/json",
-          "X-API-KEY": _apiKey, // Security key always included
+          "X-API-KEY": apiKey, // Security key always included
         },
       );
       if (response.statusCode == 200) {
@@ -63,6 +85,7 @@ class HomeApi{
     }
   }
 }
+
 class ProductApi {
   // Function to add a product
   static Future<String> addProduct({
@@ -73,14 +96,14 @@ class ProductApi {
     String? type,
     required bool is_active,
     required bool is_new,
-    required bool  is_promotion,
+    required bool is_promotion,
   }) async {
     try {
       final response = await http.post(
         Uri.parse('$apiUrl/product/add_product'),
         headers: {
           "Content-Type": "application/json",
-          "X-API-KEY": _apiKey, // Security key always included
+          "X-API-KEY": apiKey, // Security key always included
         },
         body: json.encode({
           'c_id': c_id,
@@ -88,43 +111,44 @@ class ProductApi {
           'description': description,
           'discount': discount,
           'type': type,
-          'is_active':is_active,
-          'is_new':is_new,
-          'is_promotion':is_promotion,
+          'is_active': is_active,
+          'is_new': is_new,
+          'is_promotion': is_promotion,
         }),
       );
-      return response.statusCode == 201?json.decode(response.body)['product_id']:'ERROR';
+      return response.statusCode == 201
+          ? json.decode(response.body)['product_id']
+          : 'ERROR';
     } catch (e) {
       print('Error: $e');
       return 'ERROR';
     }
   }
 
-  static Future<bool> editProduct({
-    required String productId,
-    required String name,
-    double? discount,
-    String? type,
-    String? image,
-    required bool is_active,
-    required bool is_new,
-    required bool is_promotion
-  }) async {
+  static Future<bool> editProduct(
+      {required String productId,
+      required String name,
+      double? discount,
+      String? type,
+      String? image,
+      required bool is_active,
+      required bool is_new,
+      required bool is_promotion}) async {
     try {
       final response = await http.put(
         Uri.parse('$apiUrl/product/edit_product/$productId'),
         headers: {
           "Content-Type": "application/json",
-          "X-API-KEY": _apiKey, // Security key always included
+          "X-API-KEY": apiKey, // Security key always included
         },
         body: json.encode({
           'name': name,
           'discount': discount,
           'type': type,
           'image': image,
-          'is_active':is_active,
-          'is_new':is_new,
-          'is_promotion':is_promotion,
+          'is_active': is_active,
+          'is_new': is_new,
+          'is_promotion': is_promotion,
         }),
       );
       return response.statusCode == 200;
@@ -143,11 +167,9 @@ class ProductApi {
         Uri.parse('$apiUrl/product/move_product/$productId'),
         headers: {
           "Content-Type": "application/json",
-          "X-API-KEY": _apiKey, // Security key always included
+          "X-API-KEY": apiKey, // Security key always included
         },
-        body: json.encode({
-          'c_id':parent_productId
-        }),
+        body: json.encode({'c_id': parent_productId}),
       );
       return response.statusCode == 200;
     } catch (e) {
@@ -164,24 +186,26 @@ class ProductApi {
       Uri.parse('$apiUrl/product/upload_product_image'),
       body: jsonEncode({
         "product_id": product_id,
-        "display_img":image,
+        "display_img": image,
       }),
       headers: {
         "Content-Type": "application/json",
-        "X-API-KEY": _apiKey, // Security key always included
+        "X-API-KEY": apiKey, // Security key always included
       },
     );
 
     return response.statusCode == 201;
   }
+
   // Function to get products by category
-  static Future<List<Map<String, dynamic>>> getProductsByCategory(String? categoryId) async {
+  static Future<List<Map<String, dynamic>>> getProductsByCategory(
+      String? categoryId) async {
     try {
       final response = await http.get(
         Uri.parse('$apiUrl/product/get_products_by_category/$categoryId'),
         headers: {
           "Content-Type": "application/json",
-          "X-API-KEY": _apiKey, // Security key always included
+          "X-API-KEY": apiKey, // Security key always included
         },
       );
       if (response.statusCode == 200) {
@@ -193,11 +217,11 @@ class ProductApi {
           return [];
         }
       } else {
-        throw();
+        throw ();
       }
     } catch (e) {
       print('Error: $e');
-      throw(e);
+      throw (e);
     }
   }
 
@@ -208,7 +232,7 @@ class ProductApi {
         Uri.parse('$apiUrl/product/get_product/$productId'),
         headers: {
           "Content-Type": "application/json",
-          "X-API-KEY": _apiKey, // Security key always included
+          "X-API-KEY": apiKey, // Security key always included
         },
       );
       if (response.statusCode == 200) {
@@ -229,7 +253,7 @@ class ProductApi {
         Uri.parse('$apiUrl/product/remove_product/$productId'),
         headers: {
           "Content-Type": "application/json",
-          "X-API-KEY": _apiKey, // Security key always included
+          "X-API-KEY": apiKey, // Security key always included
         },
       );
       if (response.statusCode == 200) {
@@ -248,7 +272,9 @@ class ProductApi {
     required String searchType, // 'product' or 'item'
   }) async {
     if (query.length < 3) {
-      return [{'error': 'Query must be at least 3 characters long'}]; // Return a list with error map
+      return [
+        {'error': 'Query must be at least 3 characters long'}
+      ]; // Return a list with error map
     }
 
     try {
@@ -256,7 +282,7 @@ class ProductApi {
         Uri.parse('$apiUrl/$searchType/search?query=$query'),
         headers: {
           "Content-Type": "application/json",
-          "X-API-KEY": _apiKey, // Security key always included
+          "X-API-KEY": apiKey, // Security key always included
         },
       );
 
@@ -265,23 +291,24 @@ class ProductApi {
         final List<dynamic> decoded = json.decode(response.body);
         return decoded.map((e) => e as Map<String, dynamic>).toList();
       } else {
-        return [{
-          'error': 'Failed to search $searchType',
-          'status': response.statusCode,
-          'details': response.body,
-        }];
+        return [
+          {
+            'error': 'Failed to search $searchType',
+            'status': response.statusCode,
+            'details': response.body,
+          }
+        ];
       }
     } catch (e) {
       print('Error: $e');
-      return [{
-        'error': 'An unexpected error occurred.',
-        'details': e.toString(),
-      }];
+      return [
+        {
+          'error': 'An unexpected error occurred.',
+          'details': e.toString(),
+        }
+      ];
     }
   }
-
-
-
 
   // Function to add items to a product
   static Future<void> addItemsToProduct({
@@ -293,7 +320,7 @@ class ProductApi {
         Uri.parse('$apiUrl/item/add_items_to_product/$productId'),
         headers: {
           "Content-Type": "application/json",
-          "X-API-KEY": _apiKey, // Security key always included
+          "X-API-KEY": apiKey, // Security key always included
         },
         body: json.encode({'item_ids': itemIds}),
       );
@@ -308,20 +335,18 @@ class ProductApi {
     }
   }
 
-  static Future<Map<String,dynamic>> fetchTree() async {
+  static Future<Map<String, dynamic>> fetchTree() async {
     try {
       final response = await http.post(
         Uri.parse('$apiUrl/product/get_products_treeAdmin'),
-        headers: {'Content-Type': 'application/json',"X-API-KEY": _apiKey},
+        headers: {'Content-Type': 'application/json', "X-API-KEY": apiKey},
         body: json.encode({}),
       );
       if (response.statusCode == 200) {
         try {
-
           final Map<String, dynamic> responseData = json.decode(response.body);
           print("Response: ${responseData.keys.toList().length}");
           return responseData;
-
         } catch (e) {
           print("Error parsing JSON response: $e");
           return {};
@@ -345,7 +370,7 @@ class ProductApi {
         Uri.parse('$apiUrl/product/remove_item_from_product/$productId'),
         headers: {
           "Content-Type": "application/json",
-          "X-API-KEY": _apiKey, // Security key always included
+          "X-API-KEY": apiKey, // Security key always included
         },
         body: json.encode({'item_id': itemId}),
       );
@@ -370,7 +395,7 @@ class ProductApi {
         Uri.parse('$apiUrl/product/get_items_by_product/$Id'),
         headers: {
           "Content-Type": "application/json",
-          "X-API-KEY": _apiKey, // Security key always included
+          "X-API-KEY": apiKey, // Security key always included
         },
       );
       if (response.statusCode == 200) {
@@ -382,23 +407,23 @@ class ProductApi {
           return [];
         }
       } else {
-        throw(response.body);
+        throw (response.body);
       }
     } catch (e) {
       print('Error: $e');
-      throw(e);
+      throw (e);
     }
   }
 }
-class ItemApi {
 
+class ItemApi {
   static Future<List<Map<String, dynamic>>> getAll() async {
     try {
       final response = await http.get(
         Uri.parse('$apiUrl/item/get_all'),
         headers: {
           "Content-Type": "application/json",
-          "X-API-KEY": _apiKey, // Security key always included
+          "X-API-KEY": apiKey, // Security key always included
         },
       );
 
@@ -406,20 +431,25 @@ class ItemApi {
         final List<dynamic> decoded = json.decode(response.body);
         return decoded.map((e) => e as Map<String, dynamic>).toList();
       } else {
-        return [{
-          'error': 'Failed to search Item',
-          'status': response.statusCode,
-          'details': response.body,
-        }];
+        return [
+          {
+            'error': 'Failed to search Item',
+            'status': response.statusCode,
+            'details': response.body,
+          }
+        ];
       }
     } catch (e) {
       print('Error: $e');
-      return [{
-        'error': 'An unexpected error occurred.',
-        'details': e.toString(),
-      }];
+      return [
+        {
+          'error': 'An unexpected error occurred.',
+          'details': e.toString(),
+        }
+      ];
     }
   }
+
   // Function to add an item
   static Future<String> addItem({
     required String name,
@@ -431,6 +461,7 @@ class ItemApi {
     String? disc_id,
     String? tag_name,
     double? discount,
+    String? t_id,
     List<String?>? variation_value_ids,
   }) async {
     print({
@@ -440,10 +471,10 @@ class ItemApi {
       "stock_quantity": qty,
       "product_id": productId,
       "variation_value_ids": variation_value_ids,
-      "disc_id":disc_id,
-      "tag_name":tag_name,
+      "disc_id": disc_id,
+      "tag_name": tag_name,
       "display_img": displayImg,
-      "discount":discount
+      "discount": discount
     });
     final response = await http.post(
       Uri.parse('$apiUrl/item/add_item'),
@@ -454,20 +485,22 @@ class ItemApi {
         "stock_quantity": qty,
         "product_id": productId,
         "variation_value_ids": variation_value_ids,
-        "disc_id":disc_id,
-        "tag_name":tag_name,
+        "disc_id": disc_id,
+        "tag_name": tag_name,
         "display_img": displayImg,
-        "discount":discount
+        "discount": discount,
+        "t_id": t_id
       }),
       headers: {
         "Content-Type": "application/json",
-        "X-API-KEY": _apiKey, // Security key always included
+        "X-API-KEY": apiKey, // Security key always included
       },
     );
 
-    return response.statusCode == 201?json.decode(response.body)['item_id']:'ERROR';
+    return response.statusCode == 201
+        ? json.decode(response.body)['item_id']
+        : 'ERROR';
   }
-
 
   static Future<bool> addItemImages({
     required String item_id,
@@ -477,11 +510,11 @@ class ItemApi {
       Uri.parse('$apiUrl/item/upload_item_images'),
       body: jsonEncode({
         "item_id": item_id,
-        "images":images,
+        "images": images,
       }),
       headers: {
         "Content-Type": "application/json",
-        "X-API-KEY": _apiKey, // Security key always included
+        "X-API-KEY": apiKey, // Security key always included
       },
     );
 
@@ -496,24 +529,26 @@ class ItemApi {
       Uri.parse('$apiUrl/item/edit_item_images'),
       body: jsonEncode({
         "item_id": item_id,
-        "images":images,
+        "images": images,
       }),
       headers: {
         "Content-Type": "application/json",
-        "X-API-KEY": _apiKey, // Security key always included
+        "X-API-KEY": apiKey, // Security key always included
       },
     );
 
     return response.statusCode == 200;
   }
+
   // Function to get item by ID
-  static Future<Map<String, dynamic>> getItemById(String Id,{String all='true'}) async {
+  static Future<Map<String, dynamic>> getItemById(String Id,
+      {String all = 'true'}) async {
     try {
       final response = await http.get(
         Uri.parse('$apiUrl/item/get_item/$Id/$all'),
         headers: {
           "Content-Type": "application/json",
-          "X-API-KEY": _apiKey, // Security key always included
+          "X-API-KEY": apiKey, // Security key always included
         },
       );
       if (response.statusCode == 200) {
@@ -534,7 +569,7 @@ class ItemApi {
         Uri.parse('$apiUrl/item/remove_item/$id'),
         headers: {
           "Content-Type": "application/json",
-          "X-API-KEY": _apiKey, // Security key always included
+          "X-API-KEY": apiKey, // Security key always included
         },
       );
       if (response.statusCode == 200) {
@@ -566,9 +601,11 @@ class ItemApi {
     String? displayImg,
     String? disc_id,
     String? tag_name,
+    String? t_id,
     List<dynamic>? variation_value_ids,
     double? discount,
   }) async {
+    print({"tag_name": tag_name, "t_id": t_id});
     final response = await http.put(
       Uri.parse('$apiUrl/item/edit_item'),
       body: jsonEncode({
@@ -576,7 +613,7 @@ class ItemApi {
         "name": name,
         "description": description,
         "price": price,
-        "discount":discount,
+        "discount": discount,
         "stock_quantity": qty,
         "product_id": productId,
         "isImgChanged": isImgChanged,
@@ -584,22 +621,24 @@ class ItemApi {
         "variation_value_ids": variation_value_ids,
         "disc_id": disc_id,
         "tag_name": tag_name,
+        "t_id": t_id
       }),
       headers: {
         "Content-Type": "application/json",
-        "X-API-KEY": _apiKey, // Security key always included
+        "X-API-KEY": apiKey, // Security key always included
       },
     );
 
     return response.statusCode == 200;
   }
+
   static Future<Map<String, dynamic>> getProductsByItem(String Id) async {
     try {
       final response = await http.get(
         Uri.parse('$apiUrl/item/get_products_by_item/$Id'),
         headers: {
           "Content-Type": "application/json",
-          "X-API-KEY": _apiKey, // Security key always included
+          "X-API-KEY": apiKey, // Security key always included
         },
       );
       print(response.body);
@@ -613,11 +652,9 @@ class ItemApi {
       return {'error': 'Error: $e'};
     }
   }
-
-
 }
-class DescriptionApi {
 
+class DescriptionApi {
   static Future<bool> addDescription({
     required String tag_name,
     required String content,
@@ -627,11 +664,11 @@ class DescriptionApi {
         Uri.parse('$apiUrl/description/add_disc'),
         headers: {
           "Content-Type": "application/json",
-          "X-API-KEY": _apiKey, // Security key always included
+          "X-API-KEY": apiKey, // Security key always included
         },
         body: json.encode({
-          'tag_name' :tag_name,
-          'content':content,
+          'tag_name': tag_name,
+          'content': content,
         }),
       );
       if (response.statusCode == 201) {
@@ -651,7 +688,7 @@ class DescriptionApi {
         Uri.parse('$apiUrl/description/remove_disc/$id'),
         headers: {
           "Content-Type": "application/json",
-          "X-API-KEY": _apiKey, // Security key always included
+          "X-API-KEY": apiKey, // Security key always included
         },
       );
       if (response.statusCode == 200) {
@@ -677,7 +714,10 @@ class DescriptionApi {
   static Future<Map<String, dynamic>> editDescription(
       String id, String newTagName, String newContent) async {
     if (newTagName.isEmpty || newContent.isEmpty) {
-      return {'success': false, 'error': 'Tag name and content cannot be empty'};
+      return {
+        'success': false,
+        'error': 'Tag name and content cannot be empty'
+      };
     }
 
     try {
@@ -685,7 +725,7 @@ class DescriptionApi {
         Uri.parse('$apiUrl/description/edit_disc/$id'),
         headers: {
           "Content-Type": "application/json",
-          "X-API-KEY": _apiKey, // Security key always included
+          "X-API-KEY": apiKey, // Security key always included
         },
         body: json.encode({
           'tag_name': newTagName,
@@ -713,16 +753,17 @@ class DescriptionApi {
     }
   }
 }
-class VariationApi {
 
+class VariationApi {
   // Function to fetch values for a specific variation
-  static Future<List<Map<String, dynamic>>> fetchVariationValues(String variationId) async {
+  static Future<List<Map<String, dynamic>>> fetchVariationValues(
+      String variationId) async {
     try {
       final response = await http.get(
         Uri.parse('$apiUrl/variation/get_variation_values/$variationId'),
         headers: {
           "Content-Type": "application/json",
-          "X-API-KEY": _apiKey, // Security key always included
+          "X-API-KEY": apiKey, // Security key always included
         },
       );
       if (response.statusCode == 200) {
@@ -739,13 +780,14 @@ class VariationApi {
   }
 
   // Function to edit variation
-  static Future<Map<String, dynamic>> editVariation(String id, String newName, List<Map<String, dynamic>> newOptions) async {
+  static Future<Map<String, dynamic>> editVariation(
+      String id, String newName, List<Map<String, dynamic>> newOptions) async {
     try {
       final response = await http.put(
         Uri.parse('$apiUrl/variation/edit_variation/$id'),
         headers: {
           "Content-Type": "application/json",
-          "X-API-KEY": _apiKey, // Security key always included
+          "X-API-KEY": apiKey, // Security key always included
         },
         body: json.encode({
           'name': newName,
@@ -780,7 +822,7 @@ class VariationApi {
         Uri.parse('$apiUrl/variation/delete_variation/$id'),
         headers: {
           "Content-Type": "application/json",
-          "X-API-KEY": _apiKey, // Security key always included
+          "X-API-KEY": apiKey, // Security key always included
         },
       );
 
@@ -805,15 +847,15 @@ class VariationApi {
   }
 }
 
-class OrderApi{
+class OrderApi {
   /// Fetch all orders
   static Future<List<Map<String, dynamic>>> getAllOrders() async {
     final response = await http.get(
-        Uri.parse("$apiUrl/order/get_all"),
-        headers: {
-          "Content-Type": "application/json",
-          "X-API-KEY": _apiKey, 
-        },
+      Uri.parse("$apiUrl/order/get_all"),
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-KEY": apiKey,
+      },
     );
     if (response.statusCode == 200) {
       return List<Map<String, dynamic>>.from(jsonDecode(response.body));
@@ -835,12 +877,13 @@ class OrderApi{
   }
 
   /// Update an order
-  static Future<bool> updateOrder(String orderId, Map<String, dynamic> data) async {
+  static Future<bool> updateOrder(
+      String orderId, Map<String, dynamic> data) async {
     final response = await http.put(
       Uri.parse("$apiUrl/order/edit/$orderId"),
       headers: {
         "Content-Type": "application/json",
-        "X-API-KEY": _apiKey, // Security key always included
+        "X-API-KEY": apiKey, // Security key always included
       },
       body: jsonEncode(data),
     );
@@ -852,14 +895,14 @@ class OrderApi{
     }
   }
 
-  static Future<bool> updateOrderStatus(String orderId,String status) async {
+  static Future<bool> updateOrderStatus(String orderId, String status) async {
     final response = await http.put(
       Uri.parse("$apiUrl/order/update_status/$orderId"),
       headers: {
         "Content-Type": "application/json",
-        "X-API-KEY": _apiKey, // Security key always included
+        "X-API-KEY": apiKey, // Security key always included
       },
-      body: jsonEncode({'status':status}),
+      body: jsonEncode({'status': status}),
     );
 
     if (response.statusCode == 200) {
@@ -872,11 +915,11 @@ class OrderApi{
   /// Delete an order
   static Future<bool> deleteOrder(String orderId) async {
     final response = await http.delete(
-        Uri.parse("$apiUrl/order/delete/$orderId"),
-        headers: {
-          "Content-Type": "application/json",
-          "X-API-KEY": _apiKey, // Security key always included
-        },
+      Uri.parse("$apiUrl/order/delete/$orderId"),
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-KEY": apiKey, // Security key always included
+      },
     );
     if (response.statusCode == 200) {
       return true;
@@ -886,64 +929,32 @@ class OrderApi{
   }
 }
 
-class UserApi{
+class UserApi {
   /// Fetch all orders
   static Future<List<Map<String, dynamic>>> getAllUsers() async {
-    final response = await http.get(Uri.parse("$apiUrl/user/get_all"));
+    final response = await http.get(
+      Uri.parse("$apiUrl/user/get_all"),
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-KEY": apiKey, // Security key always included
+      },
+    );
     if (response.statusCode == 200) {
       return List<Map<String, dynamic>>.from(jsonDecode(response.body));
     } else {
       throw Exception("Failed to load users");
     }
   }
-  //
-  // /// Fetch a single order by ID
-  // static Future<Map<String, dynamic>?> getOrder(String orderId) async {
-  //   final response = await http.get(Uri.parse("$apiUrl/order/get/$orderId"));
-  //   if (response.statusCode == 200) {
-  //     return jsonDecode(response.body);
-  //   } else if (response.statusCode == 404) {
-  //     return null; // Order not found
-  //   } else {
-  //     throw Exception("Failed to fetch order");
-  //   }
-  // }
-  //
-  // /// Update an order
-  // static Future<bool> updateOrder(String orderId, Map<String, dynamic> data) async {
-  //   final response = await http.put(
-  //     Uri.parse("$apiUrl/order/edit/$orderId"),
-  //     headers: {"Content-Type": "application/json"},
-  //     body: jsonEncode(data),
-  //   );
-  //
-  //   if (response.statusCode == 200) {
-  //     return true;
-  //   } else {
-  //     return false;
-  //   }
-  // }
-  //
-  // /// Delete an order
-  // static Future<bool> deleteOrder(String orderId) async {
-  //   final response = await http.delete(Uri.parse("$apiUrl/order/delete/$orderId"));
-  //   if (response.statusCode == 200) {
-  //     return true;
-  //   } else {
-  //     return false;
-  //   }
-  // }
 }
 
 class CouponApi {
-
   /// Fetch all coupons
   static Future<List<Map<String, dynamic>>> getAllCoupons() async {
     final response = await http.get(
       Uri.parse("$apiUrl/coupon/get_all"),
       headers: {
         "Content-Type": "application/json",
-        "X-API-KEY": _apiKey,
+        "X-API-KEY": apiKey,
       },
     );
 
@@ -960,7 +971,7 @@ class CouponApi {
       Uri.parse("$apiUrl/coupon/get/$couponId"),
       headers: {
         "Content-Type": "application/json",
-        "X-API-KEY": _apiKey,
+        "X-API-KEY": apiKey,
       },
     );
 
@@ -979,7 +990,7 @@ class CouponApi {
       Uri.parse("$apiUrl/coupon/add"),
       headers: {
         "Content-Type": "application/json",
-        "X-API-KEY": _apiKey,
+        "X-API-KEY": apiKey,
       },
       body: jsonEncode(data),
     );
@@ -988,12 +999,13 @@ class CouponApi {
   }
 
   /// Update an existing coupon
-  static Future<bool> updateCoupon(String couponId, Map<String, dynamic> data) async {
+  static Future<bool> updateCoupon(
+      String couponId, Map<String, dynamic> data) async {
     final response = await http.put(
       Uri.parse("$apiUrl/coupon/update/$couponId"),
       headers: {
         "Content-Type": "application/json",
-        "X-API-KEY": _apiKey,
+        "X-API-KEY": apiKey,
       },
       body: jsonEncode(data),
     );
@@ -1007,7 +1019,7 @@ class CouponApi {
       Uri.parse("$apiUrl/coupon/delete/$couponId"),
       headers: {
         "Content-Type": "application/json",
-        "X-API-KEY": _apiKey,
+        "X-API-KEY": apiKey,
       },
     );
 
@@ -1020,7 +1032,7 @@ class CouponApi {
       Uri.parse("$apiUrl/check/$couponCode"),
       headers: {
         "Content-Type": "application/json",
-        "X-API-KEY": _apiKey,
+        "X-API-KEY": apiKey,
       },
     );
 
@@ -1030,6 +1042,75 @@ class CouponApi {
       return null; // Coupon is invalid or not found
     } else {
       throw Exception("Failed to check coupon");
+    }
+  }
+}
+
+class TemplateApi {
+  // static String baseUrl='http://127.0.0.1:5000';
+
+  /// Fetch all templates
+  static Future<List<dynamic>> getTemplates() async {
+    final url = Uri.parse('$apiUrl/templates');
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to load templates');
+    }
+  }
+
+  static Future<void> deleteTemplate(String templateId) async {
+    final url = Uri.parse('$apiUrl/templates/delete/$templateId');
+    final response = await http.delete(url);
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to delete template');
+    }
+  }
+
+  /// Get template by ID
+  static Future<Map<String, dynamic>> getTemplateById(String id) async {
+    final url = Uri.parse('$apiUrl/templates/$id');
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to load template');
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getAll() async {
+    final url = Uri.parse(
+        '$apiUrl/templates/get_all'); // or /templates depending on your route
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      print(data.cast<Map<String, dynamic>>());
+      return data.cast<Map<String, dynamic>>();
+    } else {
+      throw Exception('Failed to load templates');
+    }
+  }
+
+  /// Create new template
+  static Future<Map<String, dynamic>> createTemplate(
+      Map<String, dynamic> data) async {
+    final url = Uri.parse('$apiUrl/templates/update');
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(data),
+    );
+
+    if (response.statusCode == 201 || response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      print(response.body);
+      throw Exception('Failed to create template');
     }
   }
 }

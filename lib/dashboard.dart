@@ -1,92 +1,134 @@
-
-import 'package:chitraowner/ProductTree.dart';
-import 'package:chitraowner/SearchProducts.dart';
-import 'package:chitraowner/ShowItems.dart';
-import 'package:chitraowner/ShowProducts.dart';
+// Dashboard.dart
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'HomePage.dart';
+import 'ProductTree.dart';
+import 'SearchProducts.dart';
+import 'ShowItems.dart';
+import 'ShowProducts.dart';
 
 class Dashboard extends StatefulWidget {
-  String? productId;
-  String path;
-  Dashboard({this.productId=null,this.path='MyProducts'});
+  final String? productId;
+  final String path;
+  
+  const Dashboard({
+    this.productId,
+    this.path = 'MyProducts',
+    Key? key,
+  }) : super(key: key);
+
   @override
   State<Dashboard> createState() => _DashboardState();
 }
 
 class _DashboardState extends State<Dashboard> {
   final HomepageController homeController = Get.put(HomepageController());
-  @override
-  void initState() {
-    super.initState();
-  }
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey();
+
   @override
   Widget build(BuildContext context) {
-    // print("building again ${widget.productId}");
-    final scWidth=MediaQuery.of(context).size.width;
-    return Row(
-      children: [
-        Visibility(
-          visible: scWidth > 600,
-          child: Expanded(
-            flex: 1,
-            child: ProductTreeView(selectedId: widget.productId),
+    return Scaffold(
+      key: _scaffoldKey, // Make sure you have this key defined
+      
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          _scaffoldKey.currentState?.openDrawer();
+        },
+        child: const Icon(Icons.account_tree),
+        tooltip: 'Show product tree',
+      ),
+      drawer: Drawer(
+        width: MediaQuery.of(context).size.width * 0.8,
+        child: ProductTreeView(selectedId: widget.productId),
+      ),
+      appBar: AppBar(
+        automaticallyImplyLeading: false, // This hides the drawer menu icon
+        leading: Navigator.canPop(context) 
+          ? const BackButton() 
+          : null,
+        title: Obx(() => Text(
+          homeController.productsData[widget.productId ?? 'null']?['name'] ?? 'Root',
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
           ),
-        ),
-        Visibility(
-          visible: scWidth > 600,
-          child: VerticalDivider(
-            width: 10,
-            thickness: 5,
-            color: Colors.black,
+        )),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            tooltip: 'Search products',
+            onPressed: _showSearchBottomSheet,
           ),
-        ),
-        Expanded(
-          flex: 2,
-          child: Scaffold(
-            drawer: scWidth<=600?SizedBox(
-                width: scWidth*0.7,
-                child: ProductTreeView(selectedId: widget.productId,)
-            ):null,
-            appBar:AppBar(
-              title: Obx((){return Text("${homeController.productsData[widget.productId??'null']?['name']??'Root'}",style: TextStyle(fontWeight: FontWeight.bold,fontSize: 25),);}),
-              actions: [
-                IconButton(
-                  icon: Icon(Icons.search),
-                  onPressed: () {
-                    showModalBottomSheet(
-                      context: context,
-                      builder: (BuildContext context) {
-                        return Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: SearchBarWidget(searchType: 'product'), // You can pass 'product' or 'item' based on the need
-                        );
-                      },
-                    ).then((result){
-                      if(result?['p_id']!=null)Navigator.pushReplacement(context, MaterialPageRoute(builder: (context)=>Dashboard(productId:result['p_id'] ,path: '....${result['name']}',)));
-                    });
+        ],
+      ),
+      body: _buildContent(),
+    );
+  }
 
-                  },
-                ),
-              ],
-            ) ,
-            body: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.start,
-                children: [
-                  SizedBox(height: 30,),
-                  Showproducts(categoryId:widget.productId=='Root'?null:widget.productId,oldpath: widget.path,),
-                  Divider(),
-                  SizedBox(height: 30,),
-                  if(widget.productId!=null && widget.productId!='Root')ShowItems(productId: widget.productId!),
-                ],
+  Widget _buildContent() {
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 16),
+            Showproducts(
+              categoryId: widget.productId == 'Root' ? null : widget.productId,
+              oldpath: widget.path,
+            ),
+            const Divider(height: 40),
+            if (widget.productId != null && widget.productId != 'Root')
+              ShowItems(productId: widget.productId!),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showSearchBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+          left: 16,
+          right: 16,
+          top: 16,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Drag handle
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.grey[400],
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-          ),
+            SearchBarWidget(searchType: 'product'),
+          ],
         ),
-      ],
-    );
+      ),
+    ).then((result) {
+      if (result?['p_id'] != null) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => Dashboard(
+              productId: result['p_id'],
+              path: '....${result['name']}',
+            ),
+          ),
+        );
+      }
+    });
   }
 }

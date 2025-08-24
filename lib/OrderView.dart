@@ -63,7 +63,7 @@ class OrderInfoPage extends StatelessWidget {
                       child: ListTile(
                         leading: Image.network(item['image_url'], width: 50, height: 50, fit: BoxFit.cover),
                         title: Text(item['name'], style: TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text(item['other_details']),
+                        subtitle: SelectableText(item['other_details']),
                         trailing: Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
